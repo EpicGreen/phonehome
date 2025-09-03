@@ -14,7 +14,7 @@ permissions:
   contents: write # Required for uploading release assets
 
 env:
-  PACKAGE_NAME: pushover
+  PACKAGE_NAME: phonehome_server
 
 jobs:
   build-copr:
