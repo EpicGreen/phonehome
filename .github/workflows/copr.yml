@@ -3,15 +3,6 @@ name: COPR Build
 on:
   release:
     types: [published]
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Version to build"
-        required: true
-        default: "0.1.0"
-
-permissions:
-  contents: write # Required for uploading release assets
 
 env:
   PACKAGE_NAME: phonehome_server
@@ -22,60 +13,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set version
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            VERSION="${{ github.event.release.tag_name }}"
-            VERSION=${VERSION#v}  # Remove 'v' prefix if present
-          else
-            VERSION="${{ github.event.inputs.version }}"
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION"
-
-      - name: Update spec file version
-        run: |
-          # Update version in spec file for consistency (COPR will use git content)
-          sed -i "s/^Version:.*/Version:        ${{ steps.version.outputs.version }}/" ${{ env.PACKAGE_NAME }}.spec
-
-      - name: Create source tarball
-        run: |
-          # Create tarball for artifacts and manual distribution (not used by COPR build)
-          sed -i "s/VERSION=.*/VERSION=\"${{ steps.version.outputs.version }}\"/" make-tarball.sh
-          ./make-tarball.sh
-
-      - name: Upload tarball as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.PACKAGE_NAME }}-${{ steps.version.outputs.version }}-source
-          path: ${{ env.PACKAGE_NAME }}-${{ steps.version.outputs.version }}.tar.gz
-
-      - name: Upload to release (if release event)
-        if: github.event_name == 'release'
-        run: |
-          TARBALL_NAME="${{ env.PACKAGE_NAME }}-${{ steps.version.outputs.version }}.tar.gz"
-
-          # Verify tarball exists
-          if [ ! -f "$TARBALL_NAME" ]; then
-            echo "Error: Tarball $TARBALL_NAME not found"
-            exit 1
-          fi
-
-          echo "Uploading tarball to release ${{ github.event.release.tag_name }}..."
-          if ! gh release upload ${{ github.event.release.tag_name }} \
-            "$TARBALL_NAME" \
-            --clobber; then
-            echo "Failed to upload tarball to release"
-            exit 1
-          fi
-          echo "Tarball successfully uploaded to release"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Install COPR CLI
         run: |
           sudo apt-get update
@@ -135,5 +72,5 @@ jobs:
       - name: Comment on PR (if workflow_dispatch)
         if: github.event_name == 'workflow_dispatch'
         run: |
-          echo "COPR build submitted for version ${{ steps.version.outputs.version }}"
+          echo "COPR build submitted."
           echo "Check build status at: https://copr.fedorainfracloud.org/coprs/${{ secrets.COPR_USERNAME }}/${{ secrets.COPR_PROJECT }}/builds/"
