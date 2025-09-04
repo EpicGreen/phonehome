@@ -29,7 +29,7 @@ cargo build --release
 Copy the example configuration and modify it:
 
 ```bash
-cp config.example.toml config.toml
+cp etc/phonehome_server/config.toml config.toml
 # Edit config.toml with your settings
 ```
 

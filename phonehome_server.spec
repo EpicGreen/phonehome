@@ -19,6 +19,7 @@ Requires(pre):  shadow-utils
 Requires(post): systemd
 Requires(preun): systemd
 Requires(postun): systemd
+Suggests:       bash-completion
 
 %description
 PhoneHome Server is a secure HTTPS server written in Rust that handles Cloud Init
@@ -44,22 +45,25 @@ Features:
 cargo build --release
 
 %install
-# Create directories
-install -d %{buildroot}%{_bindir}
-install -d %{buildroot}%{_sysconfdir}/phonehome
-install -d %{buildroot}%{_localstatedir}/lib/phonehome
-install -d %{buildroot}%{_localstatedir}/log/phonehome
-install -d %{buildroot}%{_unitdir}
-install -d %{buildroot}%{_bindir}
+# Create system directories
+install -d %{buildroot}%{_bindir}                                    # /usr/bin
+install -d %{buildroot}%{_sysconfdir}/phonehome                     # /etc/phonehome
+install -d %{buildroot}%{_localstatedir}/lib/phonehome              # /var/lib/phonehome
+install -d %{buildroot}%{_localstatedir}/log/phonehome              # /var/log/phonehome
+install -d %{buildroot}%{_unitdir}                                  # /usr/lib/systemd/system
+install -d %{buildroot}%{_datadir}/bash-completion/completions      # /usr/share/bash-completion/completions
 
-# Install binary
+# Install main binary to /usr/bin
 install -m 0755 target/release/%{name} %{buildroot}%{_bindir}/%{name}
 
-# Install configuration
-install -m 0640 config.example.toml %{buildroot}%{_sysconfdir}/phonehome/config.toml
+# Install configuration file to /etc/phonehome
+install -m 0640 etc/phonehome_server/config.toml %{buildroot}%{_sysconfdir}/phonehome/config.toml
 
-# Install systemd service
-install -m 0644 %{name}.service %{buildroot}%{_unitdir}/%{name}.service
+# Install systemd service file to /usr/lib/systemd/system
+install -m 0644 usr/lib/systemd/system/%{name}.service %{buildroot}%{_unitdir}/%{name}.service
+
+# Install bash completion to /usr/share/bash-completion/completions
+install -m 0644 etc/bash-completion/phonehome_server %{buildroot}%{_datadir}/bash-completion/completions/phonehome_server
 
 # Install example external application
 cat > %{buildroot}%{_bindir}/process-phone-home << 'EOF'
@@ -132,6 +136,7 @@ fi
 %{_bindir}/%{name}
 %{_bindir}/process-phone-home
 %{_unitdir}/%{name}.service
+%{_datadir}/bash-completion/completions/phonehome_server
 %dir %attr(750, root, phonehome) %{_sysconfdir}/phonehome
 %config(noreplace) %attr(640, root, phonehome) %{_sysconfdir}/phonehome/config.toml
 %dir %attr(750, phonehome, phonehome) %{_localstatedir}/lib/phonehome

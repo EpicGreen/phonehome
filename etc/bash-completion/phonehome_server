@@ -1,0 +1,54 @@
+# Bash completion for phonehome_server
+
+_phonehome_server() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # All available options
+    opts="-c --config -p --port -d --debug --dev-mode -h --help -V --version"
+
+    case "${prev}" in
+        -c|--config)
+            # Complete with .toml files and directories
+            COMPREPLY=( $(compgen -f -X "!*.toml" -- ${cur}) $(compgen -d -- ${cur}) )
+            return 0
+            ;;
+        -p|--port)
+            # Complete with common port numbers for HTTPS
+            COMPREPLY=( $(compgen -W "443 8443 9443" -- ${cur}) )
+            return 0
+            ;;
+        *)
+            ;;
+    esac
+
+    # Handle long options with equals sign
+    if [[ ${cur} == --*=* ]]; then
+        local option="${cur%%=*}"
+        local value="${cur#*=}"
+        case "${option}" in
+            --config)
+                COMPREPLY=( $(compgen -f -X "!*.toml" -- ${value}) $(compgen -d -- ${value}) )
+                return 0
+                ;;
+            --port)
+                COMPREPLY=( $(compgen -W "443 8443 9443" -- ${value}) )
+                return 0
+                ;;
+        esac
+    fi
+
+    # Complete options
+    if [[ ${cur} == -* ]]; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+
+    # Default completion (files and directories)
+    COMPREPLY=( $(compgen -f -- ${cur}) )
+}
+
+# Register the completion function for phonehome_server
+complete -F _phonehome_server phonehome_server

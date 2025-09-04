@@ -3,13 +3,13 @@ Description=PhoneHome Server - Cloud Init Phone Home Handler
 Documentation=https://github.com/your-org/phonehome_server
 After=network.target network-online.target
 Wants=network-online.target
-AssertFileIsExecutable=/usr/local/bin/phonehome_server
+AssertFileIsExecutable=/usr/bin/phonehome_server
 
 [Service]
 Type=simple
 User=phonehome
 Group=phonehome
-ExecStart=/usr/local/bin/phonehome_server --config /etc/phonehome/config.toml
+ExecStart=/usr/bin/phonehome_server --config /etc/phonehome/config.toml
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=5
