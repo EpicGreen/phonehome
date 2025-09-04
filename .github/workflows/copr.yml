@@ -119,18 +119,39 @@ jobs:
           echo "Commit Reference: $COMMIT_REF"
           echo "Spec File: ${{ env.PACKAGE_NAME }}.spec"
 
+          # Validate spec file exists
+          if [ ! -f "${{ env.PACKAGE_NAME }}.spec" ]; then
+            echo "Error: Spec file ${{ env.PACKAGE_NAME }}.spec not found in repository"
+            exit 1
+          fi
+
           # Test COPR authentication first
           echo "Testing COPR authentication..."
           copr-cli whoami
 
+          # Validate spec file syntax
+          echo "Validating spec file syntax..."
+          rpmspec -P "${{ env.PACKAGE_NAME }}.spec" > /dev/null || {
+            echo "Error: Spec file has syntax errors"
+            exit 1
+          }
+
           # Submit build to COPR using buildscm (builds directly from git repository)
           # This approach clones the git repo and builds from source, using the spec file in the repo
-          echo "Submitting build to COPR..."
+          # No Source0 tarball is needed as COPR builds directly from git
+          echo "Submitting build to COPR using buildscm method..."
           copr-cli buildscm "${{ vars.COPR_PROJECT }}" \
             --clone-url "${{ github.server_url }}/${{ github.repository }}" \
             --commit "$COMMIT_REF" \
             --spec "${{ env.PACKAGE_NAME }}.spec" \
-            --nowait
+            --nowait || {
+            echo "Error: COPR build submission failed"
+            echo "This usually indicates a spec file issue or COPR configuration problem"
+            echo "Check the spec file for Source0 references that conflict with buildscm"
+            exit 1
+          }
+          
+          echo "COPR build submitted successfully!"
 
       - name: Comment on PR (if workflow_dispatch)
         if: github.event_name == 'workflow_dispatch'
