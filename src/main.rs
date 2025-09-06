@@ -64,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
         anyhow::bail!("Development mode is only available when running under cargo (cargo run, cargo test, etc.)");
     }
 
-    let dev_mode_enabled = cli.x && is_under_cargo;
+    let dev_mode_enabled = cli.dev_mode && is_under_cargo;
 
     if dev_mode_enabled {
         warn!("Development mode enabled via CLI flag - this should NEVER be used in production!");
