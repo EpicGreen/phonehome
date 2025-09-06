@@ -1,6 +1,6 @@
-# Bash completion for phonehome_server
+# Bash completion for phonehome
 
-_phonehome_server() {
+_phonehome() {
     local cur prev opts
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
@@ -50,5 +50,5 @@ _phonehome_server() {
     COMPREPLY=( $(compgen -f -- ${cur}) )
 }
 
-# Register the completion function for phonehome_server
-complete -F _phonehome_server phonehome_server
+# Register the completion function for phonehome
+complete -F _phonehome phonehome

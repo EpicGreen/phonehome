@@ -1,18 +1,16 @@
-Name:           phonehome_server
+Name:           phonehome
 Version:        0.1.0
 Release:        1%{?dist}
 Summary:        Secure HTTPS server for Cloud Init phone home requests
 
-License:        MIT
-URL:            https://github.com/epicgreen/phonehome_server
-Source0:        %{name}-%{version}.tar.gz
+License:        AGPL-3.0-or-later
+URL:            https://github.com/epicgreen/phonehome
+Source0:        https://github.com/epicgreen/phonehome/archive/v%{version}/%{name}-%{version}.tar.gz
 
-BuildRequires:  rust >= 1.70.0
+BuildRequires:  rust >= 1.70
 BuildRequires:  cargo
 BuildRequires:  gcc
 BuildRequires:  openssl-devel
-BuildRequires:  pkg-config
-BuildRequires:  systemd-rpm-macros
 
 Requires:       openssl
 Requires(pre):  shadow-utils
@@ -21,11 +19,16 @@ Requires(preun): systemd
 Requires(postun): systemd
 Suggests:       bash-completion
 
+# Disable debuginfo package generation
+%global debug_package %{nil}
+
+# Don't strip the binary to preserve Rust symbols
+%global __os_install_post %{nil}
+
 %description
 PhoneHome Server is a secure HTTPS server written in Rust that handles Cloud Init
-phone home requests with Let's Encrypt certificate support. The server processes
-incoming phone home data, extracts configured fields, and executes external
-applications with the processed data.
+phone home requests. The server processes incoming phone home data, extracts
+configured fields, and executes external applications with the processed data.
 
 Features:
 - HTTPS support with Let's Encrypt integration
@@ -38,64 +41,48 @@ Features:
 - Health check endpoint
 
 %prep
-%setup -q
+%autosetup
 
 %build
-# Build the release version
-cargo build --release
+# Set up cargo home in build directory
+export CARGO_HOME=$PWD/.cargo
+# Build with verbose output and offline mode disabled
+cargo build --release --verbose
 
 %install
 # Create system directories
-install -d %{buildroot}%{_bindir}                                    # /usr/bin
+install -d %{buildroot}%{_bindir}                                   # /usr/bin
 install -d %{buildroot}%{_sysconfdir}/phonehome                     # /etc/phonehome
 install -d %{buildroot}%{_localstatedir}/lib/phonehome              # /var/lib/phonehome
 install -d %{buildroot}%{_localstatedir}/log/phonehome              # /var/log/phonehome
 install -d %{buildroot}%{_unitdir}                                  # /usr/lib/systemd/system
 install -d %{buildroot}%{_datadir}/bash-completion/completions      # /usr/share/bash-completion/completions
+install -d %{buildroot}%{_docdir}/%{name}                           # /usr/share/doc/phonehome
 
 # Install main binary to /usr/bin
 install -m 0755 target/release/%{name} %{buildroot}%{_bindir}/%{name}
 
 # Install configuration file to /etc/phonehome
-install -m 0640 etc/phonehome_server/config.toml %{buildroot}%{_sysconfdir}/phonehome/config.toml
+install -m 0640 etc/phonehome/config.toml %{buildroot}%{_sysconfdir}/phonehome/config.toml
 
 # Install systemd service file to /usr/lib/systemd/system
 install -m 0644 usr/lib/systemd/system/%{name}.service %{buildroot}%{_unitdir}/%{name}.service
 
 # Install bash completion to /usr/share/bash-completion/completions
-install -m 0644 etc/bash-completion/phonehome_server %{buildroot}%{_datadir}/bash-completion/completions/phonehome_server
+install -m 0644 etc/bash-completion/phonehome %{buildroot}%{_datadir}/bash-completion/completions/phonehome
 
-# Install example external application
-cat > %{buildroot}%{_bindir}/process-phone-home << 'EOF'
-#!/bin/bash
-# Default phone home processor
-DATA="$1"
-LOGFILE="/var/log/phonehome/phone-home.log"
+# Install documentation
+install -m 644 README.md %{buildroot}%{_docdir}/%{name}/
+install -m 644 LICENSE %{buildroot}%{_docdir}/%{name}/
+install -m 644 examples/database_logger.sh %{buildroot}%{_docdir}/%{name}/examples/
+install -m 644 examples/webhook_notifier.sh %{buildroot}%{_docdir}/%{name}/examples/
 
-# Ensure log file exists and has correct permissions
-touch "$LOGFILE"
-chown phonehome:phonehome "$LOGFILE" 2>/dev/null || true
+# Install configuration directory and example config
+install -d %{buildroot}%{_sysconfdir}/%{name}
+install -D -m 644 etc/%{name}/config.toml %{buildroot}%{_sysconfdir}/%{name}/config.toml
 
-# Log the received data
-echo "$(date -Iseconds): Received phone home data: $DATA" >> "$LOGFILE"
-
-# Parse pipe-separated data
-IFS='|' read -ra FIELDS <<< "$DATA"
-
-if [[ ${#FIELDS[@]} -ge 3 ]]; then
-    TIMESTAMP="${FIELDS[0]}"
-    INSTANCE_ID="${FIELDS[1]}"
-    HOSTNAME="${FIELDS[2]}"
-
-    echo "$(date -Iseconds): Instance $INSTANCE_ID ($HOSTNAME) checked in" >> "$LOGFILE"
-else
-    echo "$(date -Iseconds): Received malformed data: $DATA" >> "$LOGFILE"
-fi
-
-exit 0
-EOF
-
-chmod 0755 %{buildroot}%{_bindir}/process-phone-home
+# Install bash completion
+install -D -m 644 etc/bash-completion/%{name} %{buildroot}%{_datadir}/bash-completion/completions/%{name}
 
 %pre
 # Create phonehome user and group
@@ -132,18 +119,14 @@ fi
 
 %files
 %license LICENSE
-%doc README.md
+%doc %{_docdir}/%{name}/README.md
+%doc %{_docdir}/%{name}/CHANGELOG.md
 %{_bindir}/%{name}
-%{_bindir}/process-phone-home
-%{_unitdir}/%{name}.service
-%{_datadir}/bash-completion/completions/phonehome_server
-%dir %attr(750, root, phonehome) %{_sysconfdir}/phonehome
-%config(noreplace) %attr(640, root, phonehome) %{_sysconfdir}/phonehome/config.toml
-%dir %attr(750, phonehome, phonehome) %{_localstatedir}/lib/phonehome
-%dir %attr(750, phonehome, phonehome) %{_localstatedir}/log/phonehome
+%config(noreplace) %{_sysconfdir}/%{name}/config.toml
+%{_datadir}/bash-completion/completions/%{name}
 
 %changelog
-* Wed Sep 3 2025 Ante de Baas <packages@debaas.net> - 0.1.0-1
+* Wed Sep 3 2025 Ante de Baas <packages@debaas.net> - 0.1.1-1
 - Initial package
 - Secure HTTPS server for Cloud Init phone home requests
 - TOML configuration with token-based authentication

@@ -9,10 +9,10 @@ use clap::Parser;
 use tracing::{info, warn};
 use tracing_subscriber;
 
-use phonehome_server::{config::Config, handlers::phone_home_handler, health_check, tls, AppState};
+use phonehome::{config::Config, handlers::phone_home_handler, health_check, tls, AppState};
 
 #[derive(Parser)]
-#[command(name = "phonehome_server")]
+#[command(name = "phonehome")]
 #[command(about = "A secure HTTPS server for Cloud Init phone home requests")]
 struct Cli {
     /// Path to configuration file
@@ -51,20 +51,20 @@ async fn main() -> anyhow::Result<()> {
     tracing::subscriber::set_global_default(subscriber)
         .expect("Failed to set tracing subscriber");
 
-    info!("Starting phonehome_server");
+    info!("Starting phonehome");
 
     // Load configuration
     let mut config = Config::load(&cli.config).await?;
     info!("Configuration loaded from {:?}", cli.config);
 
     // Handle development mode flag (only allow if running under cargo)
-    let is_under_cargo = phonehome_server::config::Config::is_running_under_cargo();
+    let is_under_cargo = phonehome::config::Config::is_running_under_cargo();
 
     if cli.dev_mode && !is_under_cargo {
         anyhow::bail!("Development mode is only available when running under cargo (cargo run, cargo test, etc.)");
     }
 
-    let dev_mode_enabled = cli.dev_mode && is_under_cargo;
+    let dev_mode_enabled = cli.x && is_under_cargo;
 
     if dev_mode_enabled {
         warn!("Development mode enabled via CLI flag - this should NEVER be used in production!");
@@ -85,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Handle development mode self-signed certificate generation
     if dev_mode_enabled {
-        let (cert_path, key_path) = phonehome_server::config::Config::get_dev_cert_paths();
+        let (cert_path, key_path) = phonehome::config::Config::get_dev_cert_paths();
         info!("Development mode: Generating self-signed certificate for localhost");
         tls::generate_self_signed_cert("localhost", &cert_path, &key_path).await?;
         info!("Development mode: Self-signed certificate generated successfully");
@@ -136,7 +136,7 @@ async fn start_https_server_with_dev_cert(
 ) -> anyhow::Result<()> {
     use axum_server::tls_rustls::RustlsConfig;
 
-    let (cert_path, key_path) = phonehome_server::config::Config::get_dev_cert_paths();
+    let (cert_path, key_path) = phonehome::config::Config::get_dev_cert_paths();
     let tls_config = RustlsConfig::from_pem_file(cert_path, key_path).await?;
     axum_server::bind_rustls(bind_addr.parse()?, tls_config)
         .serve(app.into_make_service())
@@ -147,7 +147,7 @@ async fn start_https_server_with_dev_cert(
 async fn start_https_server(
     app: Router,
     bind_addr: &str,
-    tls_config: &phonehome_server::config::TlsConfig,
+    tls_config: &phonehome::config::TlsConfig,
 ) -> anyhow::Result<()> {
     use axum_server::tls_rustls::RustlsConfig;
 

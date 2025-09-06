@@ -1,15 +1,15 @@
 [Unit]
 Description=PhoneHome Server - Cloud Init Phone Home Handler
-Documentation=https://github.com/your-org/phonehome_server
+Documentation=https://github.com/your-org/phonehome
 After=network.target network-online.target
 Wants=network-online.target
-AssertFileIsExecutable=/usr/bin/phonehome_server
+AssertFileIsExecutable=/usr/bin/phonehome
 
 [Service]
 Type=simple
 User=phonehome
 Group=phonehome
-ExecStart=/usr/bin/phonehome_server --config /etc/phonehome/config.toml
+ExecStart=/usr/bin/phonehome --config /etc/phonehome/config.toml
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=5
@@ -48,7 +48,7 @@ Environment=RUST_BACKTRACE=1
 # Standard output and error
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=phonehome_server
+SyslogIdentifier=phonehome
 
 # Capabilities
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE

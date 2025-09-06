@@ -20,7 +20,7 @@ A secure HTTPS server written in Rust that handles Cloud Init phone home request
 
 ```bash
 git clone <repository-url>
-cd phonehome_server
+cd phonehome
 cargo build --release
 ```
 
@@ -29,7 +29,7 @@ cargo build --release
 Copy the example configuration and modify it:
 
 ```bash
-cp etc/phonehome_server/config.toml config.toml
+cp etc/phonehome/config.toml config.toml
 # Edit config.toml with your settings
 ```
 
@@ -39,13 +39,13 @@ For production deployment, use the RPM package:
 
 ```bash
 # Install from COPR repository
-sudo dnf copr enable antedebaas/phonehome_server
-sudo dnf install phonehome_server
+sudo dnf copr enable antedebaas/phonehome
+sudo dnf install phonehome
 
 # Or build from source
 make package
-rpmbuild -ta dist/phonehome_server-*.tar.gz
-sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome_server-*.rpm
+rpmbuild -ta dist/phonehome-*.tar.gz
+sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome-*.rpm
 ```
 
 ### 4. Set Up TLS Certificates
@@ -92,13 +92,13 @@ sudo chmod +x /usr/local/bin/process-phone-home
 **Development (from source):**
 ```bash
 # Run with default config
-./target/release/phonehome_server
+./target/release/phonehome
 
 # Run with custom config and debug logging
-./target/release/phonehome_server --config /path/to/config.toml --debug
+./target/release/phonehome --config /path/to/config.toml --debug
 
 # Run on specific port
-./target/release/phonehome_server --port 9443
+./target/release/phonehome --port 9443
 
 # Run in development mode with self-signed certificate (cargo only)
 cargo run -- --dev-mode --debug
@@ -107,14 +107,14 @@ cargo run -- --dev-mode --debug
 **Production (RPM installation):**
 ```bash
 # Start the service
-sudo systemctl start phonehome_server
-sudo systemctl enable phonehome_server
+sudo systemctl start phonehome
+sudo systemctl enable phonehome
 
 # Check status
-sudo systemctl status phonehome_server
+sudo systemctl status phonehome
 
 # View logs
-sudo journalctl -u phonehome_server -f
+sudo journalctl -u phonehome -f
 ```
 
 ## Configuration
@@ -258,7 +258,7 @@ Any additional fields present in the phone home JSON data can be extracted by na
 ## Command Line Options
 
 ```bash
-phonehome_server [OPTIONS]
+phonehome [OPTIONS]
 
 OPTIONS:
     -c, --config <FILE>    Configuration file path [default: config.toml]
@@ -307,7 +307,7 @@ PUBLIC_IP="${FIELDS[3]}"
 
 # Insert into database
 mysql -u phonehome -p"$DB_PASSWORD" phonehome_db << EOF
-INSERT INTO instances (timestamp, instance_id, hostname, public_ip) 
+INSERT INTO instances (timestamp, instance_id, hostname, public_ip)
 VALUES ('$TIMESTAMP', '$INSTANCE_ID', '$HOSTNAME', '$PUBLIC_IP');
 EOF
 ```
@@ -383,10 +383,10 @@ cargo test load_tests
 make package
 
 # Build RPM
-rpmbuild -ta dist/phonehome_server-*.tar.gz
+rpmbuild -ta dist/phonehome-*.tar.gz
 
 # Install RPM
-sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome_server-*.rpm
+sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome-*.rpm
 ```
 
 ## Troubleshooting
@@ -398,7 +398,7 @@ sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome_server-*.rpm
    # Development mode only works when running under cargo
    # Error: "Development mode is only available when running under cargo"
    # Solution: Use 'cargo run -- --dev-mode' instead of direct binary execution
-   
+
    # Self-signed certificate warnings in browser
    # Solution: Accept the certificate warning (development only)
    # Or add certificate to browser's trusted certificates for testing
@@ -414,14 +414,14 @@ sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome_server-*.rpm
 3. **Service Won't Start**
    ```bash
    # Check service status
-   sudo systemctl status phonehome_server
-   
+   sudo systemctl status phonehome
+
    # Check logs
-   sudo journalctl -u phonehome_server -n 50
-   
+   sudo journalctl -u phonehome -n 50
+
    # Check configuration
-   sudo phonehome_server --config /etc/phonehome/config.toml --help
-   
+   sudo phonehome --config /etc/phonehome/config.toml --help
+
    # For development mode issues
    # Make sure you're using 'cargo run -- --dev-mode'
    ```
@@ -430,10 +430,10 @@ sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome_server-*.rpm
    ```bash
    # Check what's using the port
    sudo ss -tlnp | grep :8443
-   
+
    # Change port in configuration
    sudo nano /etc/phonehome/config.toml
-   
+
    # Or use --port flag for development testing
    cargo run -- --dev-mode --port 9443
    ```
@@ -442,10 +442,10 @@ sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome_server-*.rpm
    ```bash
    # Check if external app is executable
    ls -la /usr/local/bin/process-phone-home
-   
+
    # Test external app manually
    sudo -u phonehome /usr/local/bin/process-phone-home "test-data"
-   
+
    # Check logs
    sudo tail -f /var/log/phonehome/phone-home.log
    ```
@@ -456,13 +456,13 @@ Enable debug logging for troubleshooting:
 
 ```bash
 # Via command line
-./phonehome_server --debug
+./phonehome --debug
 
 # Via command line with development mode (cargo only)
 cargo run -- --dev-mode --debug
 
 # Via environment variable
-RUST_LOG=debug ./phonehome_server
+RUST_LOG=debug ./phonehome
 
 # Development mode with custom port (cargo only)
 cargo run -- --dev-mode --debug --port 9443
@@ -484,7 +484,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 For issues and questions:
 1. Check the troubleshooting section
-2. Review service logs: `sudo journalctl -u phonehome_server`
+2. Review service logs: `sudo journalctl -u phonehome`
 3. Run the test suite: `cargo test`
 4. Search existing issues on GitHub
 5. Create a new issue with detailed information
@@ -492,6 +492,6 @@ For issues and questions:
 ## RPM Repository
 
 The package is available in the COPR repository:
-- Repository: `antedebaas/phonehome_server`
-- Package name: `phonehome_server`
-- Install: `sudo dnf copr enable antedebaas/phonehome_server && sudo dnf install phonehome_server`
+- Repository: `antedebaas/phonehome`
+- Package name: `phonehome`
+- Install: `sudo dnf copr enable antedebaas/phonehome && sudo dnf install phonehome`

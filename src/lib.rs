@@ -1,5 +1,5 @@
 //! PhoneHome Server Library
-//! 
+//!
 //! A secure HTTPS server for handling Cloud Init phone home requests with configurable
 //! data processing and external application execution.
 
@@ -25,6 +25,6 @@ pub struct AppState {
 pub async fn health_check() -> Result<Json<serde_json::Value>, StatusCode> {
     Ok(Json(serde_json::json!({
         "status": "ok",
-        "service": "phonehome_server"
+        "service": "phonehome"
     })))
 }

@@ -1,5 +1,5 @@
 # PhoneHome Server Configuration
-# This is an example configuration file for the phonehome_server application.
+# This is an example configuration file for the phonehome application.
 # Copy this file to config.toml and modify the values according to your setup.
 
 [server]
@@ -15,10 +15,10 @@ token = "your-secret-token-here-change-me-123456"
 
 [tls]
 # Path to the TLS certificate file (fullchain for Let's Encrypt)
-cert_path = "/etc/letsencrypt/live/your-domain.com/fullchain.pem"
+cert_path = ""
 
 # Path to the TLS private key file
-key_path = "/etc/letsencrypt/live/your-domain.com/privkey.pem"
+key_path = ""
 
 # Whether to use Let's Encrypt for automatic certificate management
 # Note: Automatic certificate generation is not yet implemented
@@ -26,10 +26,10 @@ key_path = "/etc/letsencrypt/live/your-domain.com/privkey.pem"
 use_letsencrypt = false
 
 # Domain name for Let's Encrypt certificate (required if use_letsencrypt = true)
-domain = "your-domain.com"
+domain = ""
 
 # Email address for Let's Encrypt registration (required if use_letsencrypt = true)
-email = "admin@your-domain.com"
+email = ""
 
 # ACME directory URL (optional, defaults to Let's Encrypt production)
 acme_directory = "https://acme-v02.api.letsencrypt.org/directory"

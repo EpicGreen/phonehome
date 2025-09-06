@@ -88,7 +88,7 @@ impl Default for Config {
 impl Config {
     pub async fn load<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
-        
+
         if !path.exists() {
             tracing::warn!("Configuration file {:?} does not exist, creating default config", path);
             let default_config = Self::default();
@@ -110,7 +110,7 @@ impl Config {
 
     pub async fn save<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let path = path.as_ref();
-        
+
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)
                 .await
@@ -180,10 +180,10 @@ impl Config {
     pub fn get_phone_home_url(&self, dev_mode: bool) -> String {
         let use_https = self.tls.is_some() || dev_mode;
         let scheme = if use_https { "https" } else { "http" };
-        format!("{}://{}:{}/phone-home/{}", 
-                scheme, 
-                self.server.host, 
-                self.server.port, 
+        format!("{}://{}:{}/phone-home/{}",
+                scheme,
+                self.server.host,
+                self.server.port,
                 self.server.token)
     }
 
@@ -192,7 +192,7 @@ impl Config {
         if std::env::var("CARGO_PKG_NAME").is_ok() {
             return true;
         }
-        
+
         // Check if executable path indicates cargo build
         if let Ok(exe_path) = std::env::current_exe() {
             let path_str = exe_path.to_string_lossy();
@@ -200,7 +200,7 @@ impl Config {
                 return true;
             }
         }
-        
+
         false
     }
 
@@ -239,7 +239,7 @@ mod tests {
     #[test]
     fn test_config_validation() {
         let mut config = Config::default();
-        
+
         // Valid config should pass (but will warn about default token)
         config.validate().unwrap();
 
@@ -261,7 +261,7 @@ mod tests {
         let config = Config::default();
         let url_dev = config.get_phone_home_url(true);
         let url_prod = config.get_phone_home_url(false);
-        
+
         assert!(url_dev.starts_with("https://"));
         assert!(url_prod.starts_with("https://")); // Due to default TLS config
         assert!(url_dev.contains(&config.server.token));

@@ -1,9 +1,9 @@
 use std::time::Instant;
 use futures::future::join_all;
 use serde_json::{json, Value};
-use phonehome_server::config::{Config, ServerConfig, TlsConfig, ExternalAppConfig, PhoneHomeConfig};
-use phonehome_server::models::PhoneHomeData;
-use phonehome_server::{AppState, health_check};
+use phonehome::config::{Config, ServerConfig, TlsConfig, ExternalAppConfig, PhoneHomeConfig};
+use phonehome::models::PhoneHomeData;
+use phonehome::{AppState, health_check};
 use axum::{
     body::Body,
     http::{Request, StatusCode},
@@ -25,7 +25,7 @@ pub fn create_test_app() -> Router {
             |axum::extract::State(state): axum::extract::State<AppState>,
              axum::extract::Path(token): axum::extract::Path<String>,
              axum::Json(payload): axum::Json<serde_json::Value>| async move {
-                phonehome_server::handlers::phone_home_handler(
+                phonehome::handlers::phone_home_handler(
                     axum::extract::State(state),
                     axum::extract::Path(token),
                     axum::Json(payload)
@@ -144,7 +144,7 @@ include_instance_id = false
     #[test]
     fn test_config_validation() {
         let config = create_test_config();
-        
+
         // Test basic config structure
         assert_eq!(config.server.token, "test-token-123");
         assert_eq!(config.server.port, 8444);
@@ -178,7 +178,7 @@ mod models_tests {
     #[test]
     fn test_phone_home_data_field_extraction() {
         let data: PhoneHomeData = serde_json::from_value(create_test_phone_home_data()).unwrap();
-        
+
         assert_eq!(data.extract_field_value("instance_id"), Some("i-1234567890abcdef0".to_string()));
         assert_eq!(data.extract_field_value("hostname"), Some("test-instance".to_string()));
         assert_eq!(data.extract_field_value("cloud_name"), Some("aws".to_string()));
@@ -225,13 +225,13 @@ mod models_tests {
     fn test_phone_home_data_deserialization() {
         let json_data = create_test_phone_home_data();
         let data: PhoneHomeData = serde_json::from_value(json_data).unwrap();
-        
+
         assert_eq!(data.instance_id, Some("i-1234567890abcdef0".to_string()));
         assert_eq!(data.hostname, Some("test-instance".to_string()));
         assert_eq!(data.cloud_name, Some("aws".to_string()));
         assert!(data.public_keys.is_some());
         assert!(data.instance_data.is_some());
-        
+
         let instance_data = data.instance_data.unwrap();
         assert_eq!(instance_data.local_ipv4, Some("10.0.1.100".to_string()));
         assert_eq!(instance_data.public_ipv4, Some("203.0.113.50".to_string()));
@@ -243,9 +243,9 @@ mod models_tests {
         json_data["custom_field"] = json!("custom_value");
         json_data["numeric_field"] = json!(12345);
         json_data["boolean_field"] = json!(true);
-        
+
         let data: PhoneHomeData = serde_json::from_value(json_data).unwrap();
-        
+
         assert_eq!(data.extract_field_value("custom_field"), Some("custom_value".to_string()));
         assert_eq!(data.extract_field_value("numeric_field"), Some("12345".to_string()));
         assert_eq!(data.extract_field_value("boolean_field"), Some("true".to_string()));
@@ -255,7 +255,7 @@ mod models_tests {
 #[cfg(test)]
 mod tls_tests {
     use super::*;
-    use phonehome_server::tls::{validate_tls_config, generate_self_signed_cert};
+    use phonehome::tls::{validate_tls_config, generate_self_signed_cert};
     use tempfile::TempDir;
 
     #[tokio::test]
@@ -273,7 +273,7 @@ mod tls_tests {
         // Verify the certificate files are not empty
         let cert_content = std::fs::read_to_string(&cert_path).unwrap();
         let key_content = std::fs::read_to_string(&key_path).unwrap();
-        
+
         assert!(cert_content.contains("-----BEGIN CERTIFICATE-----"));
         assert!(cert_content.contains("-----END CERTIFICATE-----"));
         assert!(key_content.contains("-----BEGIN PRIVATE KEY-----"));
@@ -353,7 +353,7 @@ mod tls_tests {
 #[cfg(test)]
 mod handlers_tests {
     use super::*;
-    use phonehome_server::handlers::validate_external_app;
+    use phonehome::handlers::validate_external_app;
     use std::collections::HashMap;
 
     #[tokio::test]
@@ -435,9 +435,9 @@ mod integration_tests {
 
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
-        
+
         assert!(body_str.contains("\"status\":\"ok\""));
-        assert!(body_str.contains("\"service\":\"phonehome_server\""));
+        assert!(body_str.contains("\"service\":\"phonehome\""));
     }
 
     #[tokio::test]
@@ -457,7 +457,7 @@ mod integration_tests {
 
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
-        
+
         assert!(body_str.contains("\"status\":\"success\""));
         assert!(body_str.contains("\"instance_id\":\"i-1234567890abcdef0\""));
     }
@@ -513,7 +513,7 @@ mod integration_tests {
 
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
-        
+
         assert!(body_str.contains("\"status\":\"success\""));
         assert!(body_str.contains("\"instance_id\":\"i-minimal\""));
     }
@@ -560,15 +560,15 @@ mod load_tests {
         let app = create_test_app();
         let phone_home_data = create_test_phone_home_data();
         let request_count = 10;
-        
+
         let start_time = Instant::now();
-        
+
         let mut tasks = Vec::new();
         for i in 0..request_count {
             let app_clone = app.clone();
             let mut data = phone_home_data.clone();
             data["instance_id"] = json!(format!("i-load-test-{:03}", i));
-            
+
             let task: tokio::task::JoinHandle<Result<axum::response::Response, _>> = tokio::spawn(async move {
                 let request = Request::builder()
                     .uri("/phone-home/test-token-123")
@@ -579,16 +579,16 @@ mod load_tests {
 
                 app_clone.oneshot(request).await
             });
-            
+
             tasks.push(task);
         }
-        
+
         let results = join_all(tasks).await;
         let duration = start_time.elapsed();
-        
+
         let mut success_count = 0;
         let mut failure_count = 0;
-        
+
         for result in results {
             match result {
                 Ok(Ok(response)) => {
@@ -601,10 +601,10 @@ mod load_tests {
                 _ => failure_count += 1,
             }
         }
-        
+
         println!("Load test completed in {:?}", duration);
         println!("Success: {}, Failures: {}", success_count, failure_count);
-        
+
         assert_eq!(success_count, request_count);
         assert_eq!(failure_count, 0);
         assert!(duration.as_secs() < 10, "Load test took too long: {:?}", duration);
@@ -614,13 +614,13 @@ mod load_tests {
     async fn test_health_endpoint_performance() {
         let app = create_test_app();
         let request_count = 100;
-        
+
         let start_time = Instant::now();
-        
+
         let mut tasks = Vec::new();
         for _ in 0..request_count {
             let app_clone = app.clone();
-            
+
             let task: tokio::task::JoinHandle<Result<axum::response::Response, _>> = tokio::spawn(async move {
                 let request = Request::builder()
                     .uri("/health")
@@ -629,22 +629,22 @@ mod load_tests {
 
                 app_clone.oneshot(request).await
             });
-            
+
             tasks.push(task);
         }
-        
+
         let results = join_all(tasks).await;
         let duration = start_time.elapsed();
-        
+
         let success_count = results.iter()
             .filter(|result| {
                 matches!(result, Ok(Ok(response)) if response.status().is_success())
             })
             .count();
-        
+
         println!("Health endpoint test completed in {:?}", duration);
         println!("Success rate: {}/{}", success_count, request_count);
-        
+
         assert_eq!(success_count, request_count);
         assert!(duration.as_secs() < 5, "Health endpoint test took too long: {:?}", duration);
     }
@@ -657,8 +657,8 @@ mod development_mode_tests {
 
     #[tokio::test]
     async fn test_self_signed_cert_generation() {
-        use phonehome_server::tls::generate_self_signed_cert;
-        
+        use phonehome::tls::generate_self_signed_cert;
+
         let temp_dir = TempDir::new().unwrap();
         let cert_path = temp_dir.path().join("test_cert.pem");
         let key_path = temp_dir.path().join("test_key.pem");
@@ -685,7 +685,7 @@ mod development_mode_tests {
         let config = create_test_config();
         let url_dev = config.get_phone_home_url(true);
         let url_prod = config.get_phone_home_url(false);
-        
+
         assert!(url_dev.starts_with("https://"));
         assert!(url_prod.starts_with("http://")); // No TLS in test config
         assert!(url_dev.contains(&config.server.token));
@@ -693,7 +693,7 @@ mod development_mode_tests {
 
     #[test]
     fn test_get_dev_cert_paths() {
-        use phonehome_server::config::Config;
+        use phonehome::config::Config;
         let (cert_path, key_path) = Config::get_dev_cert_paths();
         assert_eq!(cert_path, PathBuf::from("dev_cert.pem"));
         assert_eq!(key_path, PathBuf::from("dev_key.pem"));
@@ -701,7 +701,7 @@ mod development_mode_tests {
 
     #[test]
     fn test_cargo_detection() {
-        use phonehome_server::config::Config;
+        use phonehome::config::Config;
         // This test will pass when run under cargo
         let is_cargo = Config::is_running_under_cargo();
         // We can't guarantee the result, but we can test that the function exists
