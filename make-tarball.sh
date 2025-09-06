@@ -42,13 +42,14 @@ mkdir -p "${SOURCE_DIR}"
 # Copy essential files for building
 cp -r src/ "${SOURCE_DIR}/"
 cp -r etc/ "${SOURCE_DIR}/"
+cp -r usr/ "${SOURCE_DIR}/"
+cp -r tests/ "${SOURCE_DIR}/"
+cp -r examples/ "${SOURCE_DIR}/"
 cp Cargo.toml "${SOURCE_DIR}/"
 cp Cargo.lock "${SOURCE_DIR}/" 2>/dev/null || echo "Note: Cargo.lock not found, will be generated during build"
 cp LICENSE "${SOURCE_DIR}/"
 cp README.md "${SOURCE_DIR}/"
-cp CHANGELOG.md "${SOURCE_DIR}/"
-cp pushover.spec "${SOURCE_DIR}/"
-cp install.sh "${SOURCE_DIR}/"
+cp phonehome.spec "${SOURCE_DIR}/"
 
 # Create the tarball
 print_info "Creating tarball ${TARBALL_NAME}..."
