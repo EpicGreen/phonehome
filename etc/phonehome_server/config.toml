@@ -1,0 +1,149 @@
+# PhoneHome Server Configuration
+# This is an example configuration file for the phonehome_server application.
+# Copy this file to config.toml and modify the values according to your setup.
+
+[server]
+# Host to bind the server to (0.0.0.0 for all interfaces, 127.0.0.1 for localhost only)
+host = "0.0.0.0"
+
+# Port to listen on for HTTPS connections
+port = 8443
+
+# Secret token that must be included in the phone home URL
+# IMPORTANT: Change this to a secure, random value for production use!
+token = "your-secret-token-here-change-me-123456"
+
+[tls]
+# Path to the TLS certificate file (fullchain for Let's Encrypt)
+cert_path = "/etc/letsencrypt/live/your-domain.com/fullchain.pem"
+
+# Path to the TLS private key file
+key_path = "/etc/letsencrypt/live/your-domain.com/privkey.pem"
+
+# Whether to use Let's Encrypt for automatic certificate management
+# Note: Automatic certificate generation is not yet implemented
+# Set to false and use certbot manually for now
+use_letsencrypt = false
+
+# Domain name for Let's Encrypt certificate (required if use_letsencrypt = true)
+domain = "your-domain.com"
+
+# Email address for Let's Encrypt registration (required if use_letsencrypt = true)
+email = "admin@your-domain.com"
+
+# ACME directory URL (optional, defaults to Let's Encrypt production)
+acme_directory = "https://acme-v02.api.letsencrypt.org/directory"
+
+[external_app]
+# Command to execute when phone home data is received
+# This could be a script, binary, or any executable command
+command = "/usr/bin/process-phone-home"
+
+# Arguments to pass to the command (the processed data string will be appended at the end)
+args = ["--source", "cloud-init", "--format", "pipe-separated"]
+
+# Timeout in seconds for the external application execution
+timeout_seconds = 30
+
+# Working directory for the external application (optional)
+# working_directory = "/var/lib/phonehome"
+
+# Environment variables to set for the external application (optional)
+# [external_app.environment]
+# API_KEY = "your-api-key"
+# LOG_LEVEL = "info"
+
+[phone_home]
+# List of fields to extract from the Cloud Init phone home data
+# Available fields include:
+# - instance_id: Cloud instance identifier
+# - hostname: System hostname
+# - fqdn: Fully qualified domain name
+# - cloud_name: Cloud provider name (aws, gce, azure, etc.)
+# - platform: Platform information
+# - region: Cloud region
+# - availability_zone: Availability zone
+# - instance_type: Instance type/size
+# - local_hostname: Local hostname
+# - public_keys: SSH public keys (comma-separated)
+# - local_ipv4: Local IPv4 address
+# - public_ipv4: Public IPv4 address
+# - local_ipv6: Local IPv6 address
+# - public_ipv6: Public IPv6 address
+# - mac: MAC address
+# - security_groups: Security groups (comma-separated)
+# You can also specify custom fields that may be present in the phone home data
+fields_to_extract = [
+    "instance_id",
+    "hostname",
+    "public_ipv4",
+    "local_ipv4",
+    "cloud_name",
+    "region"
+]
+
+# Separator character to use between extracted fields
+field_separator = "|"
+
+# Whether to include a timestamp as the first field
+include_timestamp = true
+
+# Whether to include the instance_id as a separate field (even if not in fields_to_extract)
+include_instance_id = true
+
+# Example Cloud Init configuration to add to your user-data:
+#
+# #cloud-config
+# phone_home:
+#   url: "https://your-domain.com:8443/phone-home/your-secret-token-here-change-me-123456"
+#   post: all
+#   tries: 10
+#
+# The phone home URL format is:
+# https://{server.host}:{server.port}/phone-home/{server.token}
+
+# Example external application script (/usr/local/bin/process-phone-home):
+#
+# #!/bin/bash
+# # Example script to process phone home data
+# DATA="$1"
+# echo "Received phone home data: $DATA" >> /var/log/phonehome.log
+#
+# # Parse the pipe-separated data
+# IFS='|' read -ra FIELDS <<< "$DATA"
+# TIMESTAMP="${FIELDS[0]}"
+# INSTANCE_ID="${FIELDS[1]}"
+# HOSTNAME="${FIELDS[2]}"
+# PUBLIC_IP="${FIELDS[3]}"
+# LOCAL_IP="${FIELDS[4]}"
+# CLOUD_NAME="${FIELDS[5]}"
+# REGION="${FIELDS[6]}"
+#
+# # Do something with the data (send to monitoring system, update database, etc.)
+# echo "Instance $INSTANCE_ID ($HOSTNAME) is online at $PUBLIC_IP in $CLOUD_NAME/$REGION"
+
+# Development Mode
+# Development mode is available only when running under cargo (cargo run, cargo test)
+# and can be enabled with the --dev-mode CLI flag:
+#
+# cargo run -- --dev-mode --debug
+#
+# This will:
+# - Force binding to localhost (127.0.0.1) only for security
+# - Generate a self-signed certificate for HTTPS
+# - Enable HTTPS on the configured port
+# - Show development warnings in logs
+#
+# Development mode is automatically restricted to cargo-based execution
+# and cannot be enabled in production builds or installed binaries.
+
+
+# Security Notes:
+# 1. Always use HTTPS in production
+# 2. Use a strong, random token
+# 3. Restrict access to the server using firewall rules
+# 4. Regularly rotate the token
+# 5. Monitor the logs for suspicious activity
+# 6. Ensure the external application is secure and validated
+# 7. Development mode is only available via cargo and --dev-mode flag
+# 8. Development mode is automatically restricted to localhost addresses
