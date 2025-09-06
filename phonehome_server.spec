@@ -5,7 +5,6 @@ Summary:        Secure HTTPS server for Cloud Init phone home requests
 
 License:        MIT
 URL:            https://github.com/epicgreen/phonehome_server
-Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  rust >= 1.70.0
 BuildRequires:  cargo
@@ -38,7 +37,7 @@ Features:
 - Health check endpoint
 
 %prep
-# RPM builds with Source0 tarball, use: %autosetup
+%autosetup
 
 %build
 # Build the release version
