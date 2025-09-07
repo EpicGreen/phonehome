@@ -119,8 +119,10 @@ fi
 %systemd_postun_with_restart %{name}.service
 
 %files
-%license LICENSE
+%license %{_docdir}/%{name}/LICENSE
 %doc %{_docdir}/%{name}/README.md
+%doc %{_docdir}/%{name}/examples/database_logger.sh
+%doc %{_docdir}/%{name}/examples/webhook_notifier.sh
 %{_bindir}/%{name}
 %config(noreplace) %{_sysconfdir}/%{name}/config.toml
 %{_datadir}/bash-completion/completions/%{name}
