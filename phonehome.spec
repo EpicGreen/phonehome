@@ -121,7 +121,6 @@ fi
 %files
 %license LICENSE
 %doc %{_docdir}/%{name}/README.md
-%doc %{_docdir}/%{name}/CHANGELOG.md
 %{_bindir}/%{name}
 %config(noreplace) %{_sysconfdir}/%{name}/config.toml
 %{_datadir}/bash-completion/completions/%{name}
