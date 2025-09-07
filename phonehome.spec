@@ -58,6 +58,7 @@ install -d %{buildroot}%{_localstatedir}/log/%{name}                # /var/log/p
 install -d %{buildroot}%{_unitdir}/system/                          # /usr/lib/systemd/system/
 install -d %{buildroot}%{_datadir}/bash-completion/completions      # /usr/share/bash-completion/completions
 install -d %{buildroot}%{_docdir}/%{name}                           # /usr/share/doc/phonehome
+install -d %{buildroot}%{_docdir}/%{name}/examples                  # /usr/share/doc/phonehome/examples
 
 # Install main binary to /usr/bin
 install -m 0755 target/release/%{name} %{buildroot}%{_bindir}/%{name}
@@ -74,8 +75,8 @@ install -m 0644 etc/bash-completion/phonehome %{buildroot}%{_datadir}/bash-compl
 # Install documentation
 install -m 644 README.md %{buildroot}%{_docdir}/%{name}/
 install -m 644 LICENSE %{buildroot}%{_docdir}/%{name}/
-install -D -m 644 examples/database_logger.sh %{buildroot}%{_docdir}/%{name}/examples/
-install -D -m 644 examples/webhook_notifier.sh %{buildroot}%{_docdir}/%{name}/examples/
+install -m 644 examples/database_logger.sh %{buildroot}%{_docdir}/%{name}/examples/
+install -m 644 examples/webhook_notifier.sh %{buildroot}%{_docdir}/%{name}/examples/
 
 # Install configuration directory and example config
 install -d %{buildroot}%{_sysconfdir}/%{name}
