@@ -52,10 +52,10 @@ cargo build --release --verbose
 %install
 # Create system directories
 install -d %{buildroot}%{_bindir}                                   # /usr/bin
-install -d %{buildroot}%{_sysconfdir}/phonehome                     # /etc/phonehome
-install -d %{buildroot}%{_localstatedir}/lib/phonehome              # /var/lib/phonehome
-install -d %{buildroot}%{_localstatedir}/log/phonehome              # /var/log/phonehome
-install -d %{buildroot}%{_unitdir}                                  # /usr/lib/systemd/system
+install -d %{buildroot}%{_sysconfdir}/%{name}                       # /etc/phonehome
+install -d %{buildroot}%{_localstatedir}/lib/%{name}                # /var/lib/phonehome
+install -d %{buildroot}%{_localstatedir}/log/%{name}                # /var/log/phonehome
+install -d %{buildroot}%{_unitdir}/system/                          # /usr/lib/systemd/system/
 install -d %{buildroot}%{_datadir}/bash-completion/completions      # /usr/share/bash-completion/completions
 install -d %{buildroot}%{_docdir}/%{name}                           # /usr/share/doc/phonehome
 
