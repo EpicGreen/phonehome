@@ -1,5 +1,5 @@
 Name:           phonehome
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        Secure HTTPS server for Cloud Init phone home requests
 
@@ -67,7 +67,7 @@ install -m 0755 target/release/%{name} %{buildroot}%{_bindir}/%{name}
 install -m 0640 etc/phonehome/config.toml %{buildroot}%{_sysconfdir}/phonehome/config.toml
 
 # Install systemd service file to /usr/lib/systemd/system
-install -m 0644 usr/lib/systemd/system/%{name}.service %{buildroot}%{_unitdir}/%{name}.service
+install -m 0644 usr/lib/systemd/system/%{name}.service %{buildroot}%{_unitdir}/system/%{name}.service
 
 # Install bash completion to /usr/share/bash-completion/completions
 install -m 0644 etc/bash-completion/phonehome %{buildroot}%{_datadir}/bash-completion/completions/phonehome
@@ -84,6 +84,10 @@ install -D -m 644 etc/%{name}/config.toml %{buildroot}%{_sysconfdir}/%{name}/con
 
 # Install bash completion
 install -D -m 644 etc/bash-completion/%{name} %{buildroot}%{_datadir}/bash-completion/completions/%{name}
+
+# Create necessary directories for runtime data
+install -d %{buildroot}%{_localstatedir}/lib/%{name}
+install -d %{buildroot}%{_localstatedir}/log/%{name}
 
 %pre
 # Create phonehome user and group
@@ -105,9 +109,6 @@ chmod 750 %{_sysconfdir}/phonehome
 if grep -q "your-secret-token-here-change-me-123456" %{_sysconfdir}/phonehome/config.toml; then
     RANDOM_TOKEN=$(openssl rand -hex 32)
     sed -i "s/your-secret-token-here-change-me-123456/$RANDOM_TOKEN/" %{_sysconfdir}/phonehome/config.toml
-    echo "Generated random token for phone home server"
-    echo "Token: $RANDOM_TOKEN"
-    echo "Please save this token and update your Cloud Init configuration"
 fi
 
 %systemd_post %{name}.service

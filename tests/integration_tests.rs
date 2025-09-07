@@ -161,10 +161,6 @@ include_instance_id = false
         config_with_tls.tls = Some(TlsConfig {
             cert_path: "/tmp/cert.pem".into(),
             key_path: "/tmp/key.pem".into(),
-            use_letsencrypt: false,
-            domain: None,
-            email: None,
-            acme_directory: None,
         });
         let url_tls = config_with_tls.get_phone_home_url(false);
         assert_eq!(url_tls, "https://127.0.0.1:8444/phone-home/test-token-123");
@@ -292,10 +288,6 @@ mod tls_tests {
         let config = TlsConfig {
             cert_path,
             key_path,
-            use_letsencrypt: false,
-            domain: None,
-            email: None,
-            acme_directory: None,
         };
 
         let result = validate_tls_config(&config).await;
@@ -307,10 +299,6 @@ mod tls_tests {
         let config = TlsConfig {
             cert_path: "/nonexistent/cert.pem".into(),
             key_path: "/nonexistent/key.pem".into(),
-            use_letsencrypt: true,
-            domain: Some("test.example.com".to_string()),
-            email: Some("test@example.com".to_string()),
-            acme_directory: Some("https://acme-v02.api.letsencrypt.org/directory".to_string()),
         };
 
         let result = validate_tls_config(&config).await;
@@ -322,10 +310,6 @@ mod tls_tests {
         let config = TlsConfig {
             cert_path: "/nonexistent/cert.pem".into(),
             key_path: "/nonexistent/key.pem".into(),
-            use_letsencrypt: true,
-            domain: None,
-            email: Some("test@example.com".to_string()),
-            acme_directory: Some("https://acme-v02.api.letsencrypt.org/directory".to_string()),
         };
 
         let result = validate_tls_config(&config).await;
@@ -338,10 +322,6 @@ mod tls_tests {
         let config = TlsConfig {
             cert_path: "/nonexistent/cert.pem".into(),
             key_path: "/nonexistent/key.pem".into(),
-            use_letsencrypt: false,
-            domain: None,
-            email: None,
-            acme_directory: None,
         };
 
         let result = validate_tls_config(&config).await;

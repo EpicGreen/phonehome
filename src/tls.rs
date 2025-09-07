@@ -14,13 +14,8 @@ use crate::config::TlsConfig;
 
 /// Validate TLS certificate files exist and are readable
 pub async fn validate_certificate_files(config: &TlsConfig) -> Result<()> {
-    if config.use_letsencrypt && config.domain.is_some() {
-        info!("Validating Let's Encrypt configuration");
-        validate_letsencrypt_config(config).await
-    } else {
-        info!("Validating certificate files");
-        validate_file_based_tls(config).await
-    }
+    info!("Validating certificate files");
+    validate_file_based_tls(config).await
 }
 
 /// Validate existing certificate files
@@ -43,56 +38,13 @@ async fn validate_file_based_tls(config: &TlsConfig) -> Result<()> {
     Ok(())
 }
 
-/// Validate Let's Encrypt configuration
-async fn validate_letsencrypt_config(config: &TlsConfig) -> Result<()> {
-    let domain = config.domain.as_ref()
-        .ok_or_else(|| anyhow::anyhow!("Domain is required for Let's Encrypt"))?;
-
-    info!("Validating Let's Encrypt configuration for domain: {}", domain);
-
-    // Check if certificates already exist
-    if config.cert_path.exists() && config.key_path.exists() {
-        info!("Found existing Let's Encrypt certificates, validating them");
-        
-        match validate_file_based_tls(config).await {
-            Ok(_) => {
-                info!("Successfully validated existing Let's Encrypt certificates");
-                return Ok(());
-            }
-            Err(err) => {
-                warn!("Failed to validate existing certificates: {}", err);
-            }
-        }
-    }
-
-    // If we reach here, certificates don't exist or are invalid
-    info!("Let's Encrypt certificates need to be obtained for domain: {}", domain);
-    
-    let info_msg = format!(
-        "Let's Encrypt automatic certificate generation is not yet implemented.\n\
-        Please obtain certificates manually using certbot:\n\
-        \n\
-        sudo certbot certonly --standalone -d {}\n\
-        \n\
-        Then update your configuration to point to:\n\
-        cert_path = \"/etc/letsencrypt/live/{}/fullchain.pem\"\n\
-        key_path = \"/etc/letsencrypt/live/{}/privkey.pem\"\n\
-        use_letsencrypt = false\n\
-        \n\
-        Alternatively, you can use the built-in ACME client (experimental).",
-        domain, domain, domain
-    );
-
-    warn!("{}", info_msg);
-    Ok(()) // Don't fail validation, just warn
-}
 
 /// Load certificates from a PEM file
 async fn load_certs<P: AsRef<Path>>(path: P) -> Result<Vec<Certificate>> {
     let path = path.as_ref();
     let mut file = File::open(path).await
         .with_context(|| format!("Failed to open certificate file: {:?}", path))?;
-    
+
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).await
         .with_context(|| format!("Failed to read certificate file: {:?}", path))?;
@@ -117,7 +69,7 @@ async fn load_private_key<P: AsRef<Path>>(path: P) -> Result<PrivateKey> {
     let path = path.as_ref();
     let mut file = File::open(path).await
         .with_context(|| format!("Failed to open private key file: {:?}", path))?;
-    
+
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).await
         .with_context(|| format!("Failed to read private key file: {:?}", path))?;
@@ -134,7 +86,7 @@ async fn load_private_key<P: AsRef<Path>>(path: P) -> Result<PrivateKey> {
 
     // Reset reader for RSA attempt
     let mut reader = BufReader::new(contents.as_slice());
-    
+
     // Try RSA private key format
     if let Ok(mut keys) = rsa_private_keys(&mut reader) {
         if !keys.is_empty() {
@@ -148,26 +100,15 @@ async fn load_private_key<P: AsRef<Path>>(path: P) -> Result<PrivateKey> {
 
 /// Validate TLS configuration
 pub async fn validate_tls_config(config: &TlsConfig) -> Result<()> {
-    if config.use_letsencrypt {
-        if config.domain.is_none() {
-            anyhow::bail!("Domain is required when using Let's Encrypt");
-        }
-        if config.email.is_none() {
-            anyhow::bail!("Email is required when using Let's Encrypt");
-        }
-        
-        validate_letsencrypt_config(config).await?;
-    } else {
-        // For file-based TLS, validate that files exist and are readable
-        if !config.cert_path.exists() {
-            anyhow::bail!("Certificate file does not exist: {:?}", config.cert_path);
-        }
-        if !config.key_path.exists() {
-            anyhow::bail!("Private key file does not exist: {:?}", config.key_path);
-        }
-
-        validate_file_based_tls(config).await?;
+    // For file-based TLS, validate that files exist and are readable
+    if !config.cert_path.exists() {
+        anyhow::bail!("Certificate file does not exist: {:?}", config.cert_path);
     }
+    if !config.key_path.exists() {
+        anyhow::bail!("Private key file does not exist: {:?}", config.key_path);
+    }
+
+    validate_file_based_tls(config).await?;
 
     Ok(())
 }
@@ -207,7 +148,7 @@ pub async fn generate_self_signed_cert(
     // Write certificate and key files
     tokio::fs::write(cert_path, cert_pem).await
         .with_context(|| format!("Failed to write certificate file: {:?}", cert_path))?;
-    
+
     tokio::fs::write(key_path, key_pem).await
         .with_context(|| format!("Failed to write private key file: {:?}", key_path))?;
 
@@ -257,10 +198,6 @@ mod tests {
         let config = TlsConfig {
             cert_path,
             key_path,
-            use_letsencrypt: false,
-            domain: None,
-            email: None,
-            acme_directory: None,
         };
 
         let result = validate_tls_config(&config).await;
@@ -272,10 +209,6 @@ mod tests {
         let config = TlsConfig {
             cert_path: PathBuf::from("/nonexistent/cert.pem"),
             key_path: PathBuf::from("/nonexistent/key.pem"),
-            use_letsencrypt: true,
-            domain: Some("test.example.com".to_string()),
-            email: Some("test@example.com".to_string()),
-            acme_directory: Some("https://acme-v02.api.letsencrypt.org/directory".to_string()),
         };
 
         let result = validate_tls_config(&config).await;
@@ -287,10 +220,6 @@ mod tests {
         let config = TlsConfig {
             cert_path: PathBuf::from("/nonexistent/cert.pem"),
             key_path: PathBuf::from("/nonexistent/key.pem"),
-            use_letsencrypt: true,
-            domain: None,
-            email: Some("test@example.com".to_string()),
-            acme_directory: Some("https://acme-v02.api.letsencrypt.org/directory".to_string()),
         };
 
         let result = validate_tls_config(&config).await;

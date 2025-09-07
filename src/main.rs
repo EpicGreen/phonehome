@@ -1,5 +1,4 @@
-use std::path::PathBuf;
-
+use std::{path::PathBuf, process::exit};
 
 use axum::{
     routing::{get, post},
@@ -61,18 +60,14 @@ async fn main() -> anyhow::Result<()> {
     let is_under_cargo = phonehome::config::Config::is_running_under_cargo();
 
     if cli.dev_mode && !is_under_cargo {
-        anyhow::bail!("Development mode is only available when running under cargo (cargo run, cargo test, etc.)");
+        anyhow::bail!("Development mode is only available when running under cargo");
     }
 
     let dev_mode_enabled = cli.dev_mode && is_under_cargo;
 
     if dev_mode_enabled {
         warn!("Development mode enabled via CLI flag - this should NEVER be used in production!");
-        warn!("Development mode is restricted to cargo-based execution only");
-
-        // Override configuration for development mode
         config.server.host = "127.0.0.1".to_string();
-
         info!("Development mode: Server will bind to localhost only");
         info!("Development mode: Self-signed certificate will be generated");
     }
@@ -96,11 +91,13 @@ async fn main() -> anyhow::Result<()> {
         if !dev_mode_enabled {
             info!("TLS configuration found - validating certificates");
             if let Err(err) = tls::validate_tls_config(tls_config).await {
-                warn!("TLS validation failed: {}. Running without HTTPS.", err);
+                warn!("TLS validation failed: {}.", err);
+                exit(1);
             }
         }
-    } else if !dev_mode_enabled {
-        warn!("No TLS configuration found - server will run without HTTPS");
+    }
+    else {
+        exit(1);
     }
 
     // Create application state

@@ -18,16 +18,10 @@ pub struct ServerConfig {
     pub token: String,
 }
 
-
-
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TlsConfig {
     pub cert_path: PathBuf,
     pub key_path: PathBuf,
-    pub use_letsencrypt: bool,
-    pub domain: Option<String>,
-    pub email: Option<String>,
-    pub acme_directory: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -58,10 +52,6 @@ impl Default for Config {
             tls: Some(TlsConfig {
                 cert_path: PathBuf::from("/etc/letsencrypt/live/your-domain.com/fullchain.pem"),
                 key_path: PathBuf::from("/etc/letsencrypt/live/your-domain.com/privkey.pem"),
-                use_letsencrypt: true,
-                domain: Some("your-domain.com".to_string()),
-                email: Some("admin@your-domain.com".to_string()),
-                acme_directory: Some("https://acme-v02.api.letsencrypt.org/directory".to_string()),
             }),
             external_app: ExternalAppConfig {
                 command: "/usr/local/bin/process-phone-home".to_string(),
@@ -143,20 +133,11 @@ impl Config {
 
         // Validate TLS configuration if present
         if let Some(ref tls) = self.tls {
-            if tls.use_letsencrypt {
-                if tls.domain.is_none() {
-                    anyhow::bail!("Domain is required when using Let's Encrypt");
-                }
-                if tls.email.is_none() {
-                    anyhow::bail!("Email is required when using Let's Encrypt");
-                }
-            } else {
-                if !tls.cert_path.exists() {
-                    anyhow::bail!("TLS certificate file does not exist: {:?}", tls.cert_path);
-                }
-                if !tls.key_path.exists() {
-                    anyhow::bail!("TLS private key file does not exist: {:?}", tls.key_path);
-                }
+            if !tls.cert_path.exists() {
+                anyhow::bail!("TLS certificate file does not exist: {:?}", tls.cert_path);
+            }
+            if !tls.key_path.exists() {
+                anyhow::bail!("TLS private key file does not exist: {:?}", tls.key_path);
             }
         }
 
