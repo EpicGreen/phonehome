@@ -74,8 +74,8 @@ install -m 0644 etc/bash-completion/phonehome %{buildroot}%{_datadir}/bash-compl
 # Install documentation
 install -m 644 README.md %{buildroot}%{_docdir}/%{name}/
 install -m 644 LICENSE %{buildroot}%{_docdir}/%{name}/
-install -m 644 examples/database_logger.sh %{buildroot}%{_docdir}/%{name}/examples/
-install -m 644 examples/webhook_notifier.sh %{buildroot}%{_docdir}/%{name}/examples/
+install -D -m 644 examples/database_logger.sh %{buildroot}%{_docdir}/%{name}/examples/
+install -D -m 644 examples/webhook_notifier.sh %{buildroot}%{_docdir}/%{name}/examples/
 
 # Install configuration directory and example config
 install -d %{buildroot}%{_sysconfdir}/%{name}
