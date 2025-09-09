@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tracing::{debug, info, warn};
 
 /// Cloud Init phone home data structure
 /// This represents the data that Cloud Init sends in its phone home request
@@ -175,7 +176,9 @@ pub struct ProcessedPhoneHomeData {
 impl PhoneHomeData {
     /// Extract field values based on configuration
     pub fn extract_field_value(&self, field_name: &str) -> Option<String> {
-        match field_name {
+        debug!("Extracting field value for: '{}'", field_name);
+        
+        let result = match field_name {
             "instance_id" => self.instance_id.clone(),
             "hostname" => self.hostname.clone(),
             "fqdn" => self.fqdn.clone(),
@@ -222,43 +225,73 @@ impl PhoneHomeData {
                         _ => value.to_string(),
                     })
             }
+        };
+        
+        match &result {
+            Some(value) => debug!("Field '{}' extracted: '{}'", field_name, value),
+            None => debug!("Field '{}' not found or empty", field_name),
         }
+        
+        result
     }
 
     /// Process the phone home data according to configuration
     pub fn process(&self, config: &crate::config::PhoneHomeConfig) -> ProcessedPhoneHomeData {
+        info!("Starting phone home data processing");
+        debug!("Processing configuration: {:#?}", config);
+        debug!("Raw phone home data: {:#?}", self);
+        
         let mut extracted_fields = Vec::new();
 
         // Add timestamp if configured
         if config.include_timestamp {
-            extracted_fields.push(Utc::now().to_rfc3339());
+            let timestamp = Utc::now().to_rfc3339();
+            debug!("Adding timestamp: {}", timestamp);
+            extracted_fields.push(timestamp);
+        } else {
+            debug!("Timestamp not included in configuration");
         }
 
         // Add instance ID if configured and available
         if config.include_instance_id {
             if let Some(ref instance_id) = self.instance_id {
+                debug!("Adding instance ID: {}", instance_id);
                 extracted_fields.push(instance_id.clone());
             } else {
+                debug!("Instance ID not available, using 'unknown'");
                 extracted_fields.push("unknown".to_string());
             }
+        } else {
+            debug!("Instance ID not included in configuration");
         }
 
         // Extract configured fields
-        for field_name in &config.fields_to_extract {
+        debug!("Extracting {} configured fields", config.fields_to_extract.len());
+        for (index, field_name) in config.fields_to_extract.iter().enumerate() {
+            debug!("Processing field {}/{}: '{}'", index + 1, config.fields_to_extract.len(), field_name);
             let value = self.extract_field_value(field_name).unwrap_or_default();
+            if value.is_empty() {
+                warn!("Field '{}' extracted as empty value", field_name);
+            }
             extracted_fields.push(value);
         }
 
         // Format the data string
+        debug!("Formatting {} extracted fields with separator: '{}'", extracted_fields.len(), config.field_separator);
         let formatted_data = extracted_fields.join(&config.field_separator);
+        debug!("Formatted data result: '{}'", formatted_data);
+        info!("Data processing completed - extracted {} fields", extracted_fields.len());
 
-        ProcessedPhoneHomeData {
+        let processed_data = ProcessedPhoneHomeData {
             timestamp: Utc::now(),
             instance_id: self.instance_id.clone(),
             extracted_fields,
             formatted_data,
             raw_data: self.clone(),
-        }
+        };
+        
+        debug!("Final processed data: {:#?}", processed_data);
+        processed_data
     }
 }
 

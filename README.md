@@ -5,14 +5,16 @@ A secure HTTPS server written in Rust that handles Cloud Init phone home request
 ## Features
 
 - **HTTPS Support**: Built-in TLS/SSL support with Let's Encrypt integration
-- **Development Mode**: Self-signed certificate support for cargo-based development only
+- **Development Mode**: Self-signed certificate support with automatic generation
 - **Cloud Init Integration**: Handles standard Cloud Init phone home POST requests
 - **Configurable Data Processing**: Extract and format specific fields from phone home data
 - **External Application Execution**: Call external scripts/programs with processed data
 - **Token-based Security**: URL token authentication for secure endpoints
 - **TOML Configuration**: Easy-to-use configuration file format
-- **Comprehensive Logging**: Detailed logging with configurable levels
+- **Comprehensive Logging**: Detailed logging with file output and logrotate support
+- **Web Interface**: Landing page and custom error pages for better user experience
 - **Health Check Endpoint**: Built-in health monitoring
+- **Request Correlation**: Unique IDs for tracking requests through the system
 
 ## Quick Start
 
@@ -47,7 +49,20 @@ cargo build --release
 sudo cp target/release/phonehome /usr/local/bin/
 ```
 
-### 4. Set Up TLS Certificates
+### 4. Configure Logging (Optional)
+
+The server includes comprehensive logging with both console and file output:
+
+```bash
+# Logs are written to /var/log/phonehome/phonehome.log by default
+sudo mkdir -p /var/log/phonehome
+sudo chown phonehome:phonehome /var/log/phonehome
+
+# Set up log rotation
+sudo cp etc/logrotate.d/phonehome /etc/logrotate.d/
+```
+
+### 5. Set Up TLS Certificates
 
 The server will automatically generate self-signed certificates if none are provided. For production use, provide your own certificates:
 
@@ -118,6 +133,17 @@ sudo systemctl status phonehome
 sudo journalctl -u phonehome -f
 ```
 
+## Web Interface
+
+The PhoneHome server includes a web interface for better user experience:
+
+- **Landing Page** (`GET /`): Server information and usage instructions
+- **Health Check** (`GET /health`): Service status for monitoring
+- **Phone Home** (`POST /phone-home/{token}`): Data submission endpoint
+- **Error Pages**: Custom 404, 401, 400, and 500 error pages
+
+Visit `https://your-server.com:8443/` in a browser to see the landing page.
+
 ## Configuration
 
 The server uses a TOML configuration file with the following sections:
@@ -138,6 +164,20 @@ token = "your-secret-token"         # URL authentication token
 cert_path = "/path/to/cert.pem"     # Certificate file (will be auto-generated if missing)
 key_path = "/path/to/key.pem"       # Private key file (will be auto-generated if missing)
 ```
+
+### Logging Configuration
+
+```toml
+[logging]
+log_file = "/var/log/phonehome/phonehome.log"  # Path to log file
+log_level = "info"                             # Log level: trace, debug, info, warn, error
+enable_console = true                          # Enable console output
+enable_file = true                             # Enable file output
+max_file_size_mb = 100                         # Max file size before rotation
+max_files = 10                                 # Number of rotated files to keep
+```
+
+**Default Certificate Paths**: Self-signed certificates are now stored in `/var/lib/phonehome/` instead of `/etc/phonehome/` for better security and permissions.
 
 ### External Application Configuration
 
@@ -478,6 +518,397 @@ For issues and questions:
 3. Run the test suite: `cargo test`
 4. Search existing issues on GitHub
 5. Create a new issue with detailed information
+
+## Logging System
+
+The PhoneHome server uses a comprehensive structured logging system built on the `tracing` ecosystem, providing:
+
+- **Dual output**: Console and file logging with independent configuration
+- **Log rotation**: Built-in daily rotation with logrotate compatibility
+- **Request correlation**: Unique IDs for tracking requests through the system
+- **Structured data**: Optimized format for machine parsing and analysis
+- **Performance metrics**: Execution times and resource usage tracking
+- **Security logging**: Authentication events and security-relevant operations
+
+### Logging Configuration
+
+The logging system is configured in the `[logging]` section of config.toml:
+
+```toml
+[logging]
+# Path to the log file
+log_file = "/var/log/phonehome/phonehome.log"
+
+# Log level: trace, debug, info, warn, error
+log_level = "info"
+
+# Enable console logging (stdout/stderr)
+enable_console = true
+
+# Enable file logging
+enable_file = true
+
+# Maximum log file size in MB before rotation (used by tracing-appender)
+max_file_size_mb = 100
+
+# Maximum number of rotated log files to keep
+max_files = 10
+```
+
+#### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `log_file` | Path | `/var/log/phonehome/phonehome.log` | Full path to the log file |
+| `log_level` | String | `"info"` | Minimum log level to record |
+| `enable_console` | Boolean | `true` | Enable console output |
+| `enable_file` | Boolean | `true` | Enable file output |
+| `max_file_size_mb` | Number | 100 | Max file size before rotation |
+| `max_files` | Number | 10 | Number of rotated files to keep |
+
+#### Log Levels
+
+- **trace**: Most verbose, includes all internal operations
+- **debug**: Detailed information for debugging (enabled with `--debug` flag)
+- **info**: General operational information
+- **warn**: Warning conditions that should be monitored
+- **error**: Error conditions that need attention
+
+### Command Line Options
+
+#### Debug Mode
+
+Enable debug logging regardless of configuration:
+
+```bash
+phonehome --debug
+```
+
+This overrides the `log_level` configuration and enables maximum verbosity.
+
+#### Configuration File
+
+Specify a custom configuration file:
+
+```bash
+phonehome --config /path/to/custom/config.toml
+```
+
+### Log Formats
+
+#### Console Output
+
+Console logs use a human-readable format with colors and formatting:
+
+```
+2024-01-15T10:30:45.123456Z  INFO phonehome::main: Starting phonehome server
+2024-01-15T10:30:45.124567Z DEBUG phonehome::config: Loading configuration from: "/etc/phonehome/config.toml"
+```
+
+#### File Output
+
+File logs use a structured format optimized for parsing:
+
+```
+2024-01-15T10:30:45.123456Z  INFO phonehome::handlers: [550e8400-e29b-41d4-a716-446655440000] Received phone home request with token: abc123
+```
+
+### Request Correlation
+
+Each HTTP request receives a unique correlation ID (UUID) that appears in all related log entries:
+
+```
+INFO [550e8400-e29b-41d4-a716-446655440000] Received phone home request with token: abc123
+DEBUG [550e8400-e29b-41d4-a716-446655440000] Phone home payload: {...}
+INFO [550e8400-e29b-41d4-a716-446655440000] External application executed successfully
+```
+
+This allows you to trace a complete request through the system using tools like `grep`:
+
+```bash
+grep "550e8400-e29b-41d4-a716-446655440000" /var/log/phonehome/phonehome.log
+```
+
+### Log Categories
+
+#### Startup and Configuration
+
+```
+INFO Starting phonehome server
+INFO Configuration loaded successfully from: "/etc/phonehome/config.toml"
+INFO Server will bind to: 0.0.0.0:8443
+INFO TLS setup completed successfully
+INFO Application router configured with routes:
+INFO   GET  /health - Health check endpoint
+INFO   POST /phone-home/:token - Phone home data endpoint
+```
+
+#### Request Processing
+
+```
+INFO [correlation-id] Received phone home request with token: abc123
+DEBUG [correlation-id] Phone home payload: {"instance_id": "i-1234567890abcdef0", ...}
+INFO [correlation-id] Processing phone home data for instance: "i-1234567890abcdef0"
+INFO [correlation-id] Extracted data: 4 fields, formatted as: '2024-01-15T10:30:45Z|i-1234567890abcdef0|web-server|10.0.1.100'
+```
+
+#### External Application Execution
+
+```
+INFO [correlation-id] Executing external application: /usr/bin/process-phone-home
+DEBUG [correlation-id] Command args: ["--source", "cloud-init"]
+DEBUG [correlation-id] Data to pass: '2024-01-15T10:30:45Z|i-1234567890abcdef0|web-server|10.0.1.100'
+INFO [correlation-id] External application executed successfully in 245ms
+```
+
+#### Authentication and Security
+
+```
+WARN [correlation-id] Invalid token provided: wrong-token
+ERROR [correlation-id] Authentication failed - rejecting request
+```
+
+#### TLS and Certificates
+
+```
+INFO TLS configuration found - setting up certificates
+INFO Certificate files validated successfully
+INFO Self-signed certificate generated successfully
+```
+
+#### Health Checks
+
+```
+DEBUG Health check endpoint accessed
+INFO Health check successful
+```
+
+### Log Rotation
+
+#### Built-in Rotation
+
+The server uses `tracing-appender` for built-in daily log rotation:
+
+- Logs rotate automatically at midnight (UTC)
+- Old files are named with date suffix: `phonehome.log.2024-01-14`
+- Rotation is transparent to the running application
+
+#### Logrotate Integration
+
+For more advanced rotation policies, use logrotate. Install the provided configuration:
+
+```bash
+sudo cp etc/logrotate.d/phonehome /etc/logrotate.d/
+```
+
+The logrotate configuration provides:
+- Daily rotation
+- 30-day retention
+- Compression of old logs
+- Proper permissions management
+- Signal handling for log file reopening
+
+#### Manual Rotation
+
+To manually rotate logs without stopping the service:
+
+```bash
+sudo logrotate -f /etc/logrotate.d/phonehome
+```
+
+### Monitoring and Analysis
+
+#### Finding Errors
+
+```bash
+# Recent errors
+grep "ERROR" /var/log/phonehome/phonehome.log | tail -20
+
+# Authentication failures
+grep "Authentication failed" /var/log/phonehome/phonehome.log
+```
+
+#### Performance Analysis
+
+```bash
+# External application execution times
+grep "executed successfully in" /var/log/phonehome/phonehome.log
+
+# Slow requests (over 1 second)
+grep -E "executed successfully in [1-9][0-9][0-9][0-9]ms" /var/log/phonehome/phonehome.log
+```
+
+#### Request Tracking
+
+```bash
+# Follow a specific request
+CORRELATION_ID="550e8400-e29b-41d4-a716-446655440000"
+grep "$CORRELATION_ID" /var/log/phonehome/phonehome.log
+```
+
+#### Statistics
+
+```bash
+# Request volume per hour
+grep "Received phone home request" /var/log/phonehome/phonehome.log | \
+  cut -d'T' -f2 | cut -d':' -f1 | sort | uniq -c
+
+# Most common instance IDs
+grep "Processing phone home data for instance" /var/log/phonehome/phonehome.log | \
+  grep -o '"[^"]*"' | sort | uniq -c | sort -nr
+```
+
+### Log Aggregation
+
+#### Systemd Journal
+
+When running as a systemd service, logs also go to the journal:
+
+```bash
+# Follow live logs
+journalctl -u phonehome -f
+
+# View recent logs
+journalctl -u phonehome --since "1 hour ago"
+
+# Filter by log level
+journalctl -u phonehome -p err
+```
+
+#### Centralized Logging
+
+For production deployments, consider centralized logging solutions:
+
+##### Rsyslog
+
+Configure rsyslog to forward logs:
+
+```
+# /etc/rsyslog.d/phonehome.conf
+if $programname == 'phonehome' then @@log-server:514
+& stop
+```
+
+##### Fluentd/Fluent Bit
+
+Monitor the log file and forward to Elasticsearch, S3, etc.:
+
+```yaml
+# fluent-bit.conf
+[INPUT]
+    Name tail
+    Path /var/log/phonehome/phonehome.log
+    Tag phonehome
+    Parser json
+
+[OUTPUT]
+    Name elasticsearch
+    Match phonehome
+    Host elasticsearch.example.com
+    Port 9200
+    Index phonehome
+```
+
+### Troubleshooting
+
+#### Log File Permissions
+
+Ensure proper permissions for log directory:
+
+```bash
+sudo mkdir -p /var/log/phonehome
+sudo chown phonehome:phonehome /var/log/phonehome
+sudo chmod 755 /var/log/phonehome
+```
+
+#### Disk Space
+
+Monitor disk usage for log directory:
+
+```bash
+# Check current usage
+du -sh /var/log/phonehome/
+
+# Set up monitoring alert
+df /var/log/phonehome | awk 'NR==2 {if($5+0 > 80) print "WARNING: Log partition over 80% full"}'
+```
+
+#### Debug Mode
+
+Enable debug logging for troubleshooting:
+
+```bash
+# Temporary debug mode
+phonehome --debug --config /etc/phonehome/config.toml
+
+# Or modify config.toml
+log_level = "debug"
+```
+
+#### Common Issues
+
+1. **Permission Denied**: Check file/directory ownership and permissions
+2. **Disk Full**: Verify log rotation is working and disk space is available
+3. **No Logs**: Check `enable_file` and `enable_console` settings
+4. **Slow Performance**: Review log level (trace/debug can be verbose)
+
+### Security Considerations
+
+#### Log Sanitization
+
+The server automatically sanitizes sensitive data in logs:
+- Tokens are partially masked in error messages
+- Personal data is not logged unless explicitly configured
+
+#### Access Control
+
+Secure log file access:
+
+```bash
+# Restrictive permissions
+sudo chmod 640 /var/log/phonehome/phonehome.log
+sudo chown phonehome:adm /var/log/phonehome/phonehome.log
+```
+
+#### Retention Policy
+
+Configure appropriate retention based on compliance requirements:
+- PCI DSS: 1 year minimum
+- GDPR: Based on data processing purposes
+- SOX: 7 years for financial data
+
+### Best Practices
+
+1. **Monitor Error Rates**: Set up alerts for ERROR level log entries
+2. **Regular Rotation**: Ensure logrotate is configured and running
+3. **Correlation IDs**: Use correlation IDs to trace issues across logs
+4. **Log Levels**: Use INFO for production, DEBUG for troubleshooting
+5. **Centralized Logging**: Consider log aggregation for multi-server deployments
+6. **Performance Impact**: Monitor log volume impact on I/O performance
+7. **Security**: Protect log files from unauthorized access
+8. **Backup**: Include log files in backup strategies for compliance
+
+### Complete Logging Setup
+
+1. Install the service:
+```bash
+sudo systemctl enable phonehome
+sudo systemctl start phonehome
+```
+
+2. Configure logrotate:
+```bash
+sudo cp etc/logrotate.d/phonehome /etc/logrotate.d/
+sudo logrotate -d /etc/logrotate.d/phonehome  # Test configuration
+```
+
+3. Set up monitoring:
+```bash
+# Add to crontab for daily error summary
+0 9 * * * grep "ERROR" /var/log/phonehome/phonehome.log.$(date -d yesterday +%Y-%m-%d) | mail -s "PhoneHome Errors" admin@example.com
+```
+
+This comprehensive logging system provides full visibility into PhoneHome server operations while maintaining performance and security.
 
 ## RPM Repository
 
