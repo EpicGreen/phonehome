@@ -43,9 +43,8 @@ sudo dnf copr enable antedebaas/phonehome
 sudo dnf install phonehome
 
 # Or build from source
-make package
-rpmbuild -ta dist/phonehome-*.tar.gz
-sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome-*.rpm
+cargo build --release
+sudo cp target/release/phonehome /usr/local/bin/
 ```
 
 ### 4. Set Up TLS Certificates
@@ -343,11 +342,11 @@ RUST_LOG=debug cargo run
 # Run for testing (auto-generates self-signed cert if needed)
 cargo run -- --debug
 
-# Using Make
-make build      # Debug build
-make release    # Release build
-make test       # Run tests
-make run-dev    # Development server
+# Using Cargo
+cargo build             # Debug build
+cargo build --release  # Release build
+cargo test             # Run tests
+cargo run -- --debug  # Development server
 ```
 
 ### Testing
@@ -373,14 +372,13 @@ cargo test load_tests
 ### RPM Packaging
 
 ```bash
-# Create source package
-make package
+# Create source package (for RPM builds)
+# Source tarballs are automatically created by GitHub Actions for releases
 
-# Build RPM
-rpmbuild -ta dist/phonehome-*.tar.gz
-
-# Install RPM
-sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome-*.rpm
+# Build RPM manually (if needed)
+# 1. Download source tarball from GitHub release
+# 2. rpmbuild -ta phonehome-*.tar.gz
+# 3. sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome-*.rpm
 ```
 
 ## Troubleshooting
