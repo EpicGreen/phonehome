@@ -97,7 +97,6 @@ getent passwd phonehome >/dev/null || \
     -s /sbin/nologin -c "PhoneHome Server" phonehome
 
 %post
-# Set up directories with correct permissions
 chown phonehome:phonehome %{_localstatedir}/lib/phonehome
 chown phonehome:phonehome %{_localstatedir}/log/phonehome
 chown root:phonehome %{_sysconfdir}/phonehome

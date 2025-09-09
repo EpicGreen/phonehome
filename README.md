@@ -50,20 +50,25 @@ sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome-*.rpm
 
 ### 4. Set Up TLS Certificates
 
-For Let's Encrypt certificates:
+The server will automatically generate self-signed certificates if none are provided. For production use, provide your own certificates:
 
 ```bash
-# Install certbot if not already installed
+# Option 1: Use Let's Encrypt with certbot
 sudo dnf install certbot  # Fedora/RHEL/CentOS
 # or
 sudo apt install certbot  # Ubuntu/Debian
 
-# Obtain certificates
 sudo certbot certonly --standalone -d your-domain.com
 
 # Update config.toml with certificate paths:
 # cert_path = "/etc/letsencrypt/live/your-domain.com/fullchain.pem"
 # key_path = "/etc/letsencrypt/live/your-domain.com/privkey.pem"
+
+# Option 2: Use your own certificates
+# Simply place your certificate and private key files and update config.toml
+
+# Option 3: Let the server generate self-signed certificates (testing only)
+# Leave cert_path and key_path pointing to non-existent files
 ```
 
 ### 5. Create an External Application
@@ -99,9 +104,6 @@ sudo chmod +x /usr/local/bin/process-phone-home
 
 # Run on specific port
 ./target/release/phonehome --port 9443
-
-# Run in development mode with self-signed certificate (cargo only)
-cargo run -- --dev-mode --debug
 ```
 
 **Production (RPM installation):**
@@ -134,11 +136,8 @@ token = "your-secret-token"         # URL authentication token
 
 ```toml
 [tls]
-cert_path = "/path/to/cert.pem"     # Certificate file
-key_path = "/path/to/key.pem"       # Private key file
-use_letsencrypt = false             # Enable Let's Encrypt (experimental)
-domain = "your-domain.com"          # Domain for Let's Encrypt
-email = "admin@your-domain.com"     # Email for Let's Encrypt
+cert_path = "/path/to/cert.pem"     # Certificate file (will be auto-generated if missing)
+key_path = "/path/to/key.pem"       # Private key file (will be auto-generated if missing)
 ```
 
 ### External Application Configuration
@@ -178,24 +177,21 @@ Development mode provides:
 - Self-signed certificate generation for localhost HTTPS testing
 - Automatic localhost binding for security
 - Bypasses Let's Encrypt and manual certificate configuration
-- Restricted to cargo-based execution only
+- Self-signed certificates are automatically generated when certificate files don't exist
 
-**Using Development Mode:**
+**Testing and Development:**
 
-Development mode can only be enabled via CLI flag when running under cargo:
+For testing purposes, you can run the server without providing certificate files:
 ```bash
-cargo run -- --dev-mode --debug
+cargo run -- --debug
 ```
 
-Development mode restrictions:
-- Only available when running via `cargo run`, `cargo test`, etc.
-- Cannot be enabled in production builds or installed binaries
-- Automatically rejected if not running under cargo
-- Server automatically binds to localhost (127.0.0.1) only
-- Self-signed certificate is generated automatically
-- HTTPS is enabled with the self-signed certificate
-- Development warnings are shown in logs
-- The phone home URL will be: `https://127.0.0.1:8443/phone-home/your-token`
+Certificate behavior:
+- If certificate files exist, they will be validated and used
+- If certificate files don't exist, self-signed certificates are automatically generated
+- Self-signed certificates should only be used for testing or internal use
+- Generated certificates use "localhost" as the domain name
+- The phone home URL format: `https://your-host:port/phone-home/your-token`
 
 ## Cloud Init Integration
 
@@ -264,8 +260,6 @@ OPTIONS:
     -c, --config <FILE>    Configuration file path [default: config.toml]
     -p, --port <PORT>      Override port from configuration
     -d, --debug            Enable debug logging
-        --dev-mode         Enable development mode with self-signed certificate
-                          (cargo-based execution only - NEVER use in production!)
     -h, --help             Print help information
     -V, --version          Print version information
 ```
@@ -346,8 +340,8 @@ cargo test
 # Run with logging
 RUST_LOG=debug cargo run
 
-# Run in development mode (self-signed cert, cargo only)
-cargo run -- --dev-mode --debug
+# Run for testing (auto-generates self-signed cert if needed)
+cargo run -- --debug
 
 # Using Make
 make build      # Debug build
@@ -394,23 +388,26 @@ sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome-*.rpm
 ### Common Issues
 
 1. **Development Mode Issues**
-   ```bash
-   # Development mode only works when running under cargo
-   # Error: "Development mode is only available when running under cargo"
-   # Solution: Use 'cargo run -- --dev-mode' instead of direct binary execution
+   1. **TLS Certificate Issues**
+      ```bash
+      # Self-signed certificate warnings in browser
+      # Solution: Accept the certificate warning (testing only)
+      # Or add certificate to browser's trusted certificates for testing
 
-   # Self-signed certificate warnings in browser
-   # Solution: Accept the certificate warning (development only)
-   # Or add certificate to browser's trusted certificates for testing
-   ```
+      # Certificate file not found
+      # Solution: Provide valid certificate files or let the server auto-generate them
+      ```
 
+   2. **Permission Issues**
 2. **Certificate Permission Issues**
    ```bash
    # Fix certificate permissions for phonehome user
-   sudo usermod -a -G letsencrypt phonehome
-   sudo chmod 644 /etc/letsencrypt/live/domain/*.pem
+   sudo chown phonehome:phonehome /path/to/cert.pem /path/to/key.pem
+   sudo chmod 644 /path/to/cert.pem
+   sudo chmod 600 /path/to/key.pem
    ```
 
+3. **Service Issues**
 3. **Service Won't Start**
    ```bash
    # Check service status
@@ -421,11 +418,9 @@ sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome-*.rpm
 
    # Check configuration
    sudo phonehome --config /etc/phonehome/config.toml --help
-
-   # For development mode issues
-   # Make sure you're using 'cargo run -- --dev-mode'
    ```
 
+4. **Port Conflicts**
 4. **Port Already in Use**
    ```bash
    # Check what's using the port
@@ -434,11 +429,11 @@ sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome-*.rpm
    # Change port in configuration
    sudo nano /etc/phonehome/config.toml
 
-   # Or use --port flag for development testing
-   cargo run -- --dev-mode --port 9443
+   # Or use --port flag for testing
+   cargo run -- --port 9443
    ```
 
-5. **External Application Fails**
+5. **External Application Issues**
    ```bash
    # Check if external app is executable
    ls -la /usr/local/bin/process-phone-home
@@ -458,14 +453,11 @@ Enable debug logging for troubleshooting:
 # Via command line
 ./phonehome --debug
 
-# Via command line with development mode (cargo only)
-cargo run -- --dev-mode --debug
-
 # Via environment variable
 RUST_LOG=debug ./phonehome
 
-# Development mode with custom port (cargo only)
-cargo run -- --dev-mode --debug --port 9443
+# Testing with custom port
+cargo run -- --debug --port 9443
 ```
 
 ## License

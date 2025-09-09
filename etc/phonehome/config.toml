@@ -14,25 +14,13 @@ port = 8443
 token = "your-secret-token-here-change-me-123456"
 
 [tls]
-# Path to the TLS certificate file (fullchain for Let's Encrypt)
-cert_path = ""
+# Path to the TLS certificate file
+# If the file doesn't exist, a self-signed certificate will be generated automatically
+cert_path = "cert.pem"
 
 # Path to the TLS private key file
-key_path = ""
-
-# Whether to use Let's Encrypt for automatic certificate management
-# Note: Automatic certificate generation is not yet implemented
-# Set to false and use certbot manually for now
-use_letsencrypt = false
-
-# Domain name for Let's Encrypt certificate (required if use_letsencrypt = true)
-domain = ""
-
-# Email address for Let's Encrypt registration (required if use_letsencrypt = true)
-email = ""
-
-# ACME directory URL (optional, defaults to Let's Encrypt production)
-acme_directory = "https://acme-v02.api.letsencrypt.org/directory"
+# If the file doesn't exist, a private key will be generated automatically
+key_path = "key.pem"
 
 [external_app]
 # Command to execute when phone home data is received
@@ -122,20 +110,14 @@ include_instance_id = true
 # # Do something with the data (send to monitoring system, update database, etc.)
 # echo "Instance $INSTANCE_ID ($HOSTNAME) is online at $PUBLIC_IP in $CLOUD_NAME/$REGION"
 
-# Development Mode
-# Development mode is available only when running under cargo (cargo run, cargo test)
-# and can be enabled with the --dev-mode CLI flag:
+# Certificate Management
+# The server can automatically generate self-signed certificates if the certificate
+# files specified above do not exist. This is useful for testing and development.
+# For production use, provide your own certificate files or use a certificate
+# authority like Let's Encrypt with certbot:
 #
-# cargo run -- --dev-mode --debug
-#
-# This will:
-# - Force binding to localhost (127.0.0.1) only for security
-# - Generate a self-signed certificate for HTTPS
-# - Enable HTTPS on the configured port
-# - Show development warnings in logs
-#
-# Development mode is automatically restricted to cargo-based execution
-# and cannot be enabled in production builds or installed binaries.
+# sudo certbot certonly --standalone -d your-domain.com
+# Then update cert_path and key_path to point to the generated certificates.
 
 
 # Security Notes:
@@ -145,5 +127,5 @@ include_instance_id = true
 # 4. Regularly rotate the token
 # 5. Monitor the logs for suspicious activity
 # 6. Ensure the external application is secure and validated
-# 7. Development mode is only available via cargo and --dev-mode flag
-# 8. Development mode is automatically restricted to localhost addresses
+# 7. Use proper certificate management for production deployments
+# 8. Self-signed certificates should only be used for testing or internal use

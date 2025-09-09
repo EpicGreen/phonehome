@@ -1,16 +1,16 @@
-use std::time::Instant;
-use futures::future::join_all;
-use serde_json::{json, Value};
-use phonehome::config::{Config, ServerConfig, TlsConfig, ExternalAppConfig, PhoneHomeConfig};
-use phonehome::models::PhoneHomeData;
-use phonehome::{AppState, health_check};
 use axum::{
     body::Body,
     http::{Request, StatusCode},
     Router,
 };
-use tower::ServiceExt;
+use futures::future::join_all;
+use phonehome::config::{Config, ExternalAppConfig, PhoneHomeConfig, ServerConfig, TlsConfig};
+use phonehome::models::PhoneHomeData;
+use phonehome::{health_check, AppState};
+use serde_json::{json, Value};
 use std::sync::Arc;
+use std::time::Instant;
+use tower::ServiceExt;
 
 // Helper function to create a test app for integration tests
 pub fn create_test_app() -> Router {
@@ -21,17 +21,21 @@ pub fn create_test_app() -> Router {
 
     Router::new()
         .route("/health", axum::routing::get(health_check))
-        .route("/phone-home/:token", axum::routing::post(
-            |axum::extract::State(state): axum::extract::State<AppState>,
-             axum::extract::Path(token): axum::extract::Path<String>,
-             axum::Json(payload): axum::Json<serde_json::Value>| async move {
-                phonehome::handlers::phone_home_handler(
-                    axum::extract::State(state),
-                    axum::extract::Path(token),
-                    axum::Json(payload)
-                ).await
-            }
-        ))
+        .route(
+            "/phone-home/:token",
+            axum::routing::post(
+                |axum::extract::State(state): axum::extract::State<AppState>,
+                 axum::extract::Path(token): axum::extract::Path<String>,
+                 axum::Json(payload): axum::Json<serde_json::Value>| async move {
+                    phonehome::handlers::phone_home_handler(
+                        axum::extract::State(state),
+                        axum::extract::Path(token),
+                        axum::Json(payload),
+                    )
+                    .await
+                },
+            ),
+        )
         .with_state(state)
 }
 
@@ -94,8 +98,8 @@ fn create_test_phone_home_data() -> Value {
 #[cfg(test)]
 mod config_tests {
     use super::*;
-    use tempfile::NamedTempFile;
     use std::io::Write;
+    use tempfile::NamedTempFile;
 
     #[tokio::test]
     async fn test_config_load_default() {
@@ -154,7 +158,7 @@ include_instance_id = false
     #[test]
     fn test_phone_home_url_generation() {
         let config = create_test_config();
-        let url = config.get_phone_home_url(false);
+        let url = config.get_phone_home_url();
         assert_eq!(url, "http://127.0.0.1:8444/phone-home/test-token-123");
 
         let mut config_with_tls = config;
@@ -162,7 +166,7 @@ include_instance_id = false
             cert_path: "/tmp/cert.pem".into(),
             key_path: "/tmp/key.pem".into(),
         });
-        let url_tls = config_with_tls.get_phone_home_url(false);
+        let url_tls = config_with_tls.get_phone_home_url();
         assert_eq!(url_tls, "https://127.0.0.1:8444/phone-home/test-token-123");
     }
 }
@@ -175,12 +179,30 @@ mod models_tests {
     fn test_phone_home_data_field_extraction() {
         let data: PhoneHomeData = serde_json::from_value(create_test_phone_home_data()).unwrap();
 
-        assert_eq!(data.extract_field_value("instance_id"), Some("i-1234567890abcdef0".to_string()));
-        assert_eq!(data.extract_field_value("hostname"), Some("test-instance".to_string()));
-        assert_eq!(data.extract_field_value("cloud_name"), Some("aws".to_string()));
-        assert_eq!(data.extract_field_value("local_ipv4"), Some("10.0.1.100".to_string()));
-        assert_eq!(data.extract_field_value("public_ipv4"), Some("203.0.113.50".to_string()));
-        assert_eq!(data.extract_field_value("security_groups"), Some("sg-12345678,sg-87654321".to_string()));
+        assert_eq!(
+            data.extract_field_value("instance_id"),
+            Some("i-1234567890abcdef0".to_string())
+        );
+        assert_eq!(
+            data.extract_field_value("hostname"),
+            Some("test-instance".to_string())
+        );
+        assert_eq!(
+            data.extract_field_value("cloud_name"),
+            Some("aws".to_string())
+        );
+        assert_eq!(
+            data.extract_field_value("local_ipv4"),
+            Some("10.0.1.100".to_string())
+        );
+        assert_eq!(
+            data.extract_field_value("public_ipv4"),
+            Some("203.0.113.50".to_string())
+        );
+        assert_eq!(
+            data.extract_field_value("security_groups"),
+            Some("sg-12345678,sg-87654321".to_string())
+        );
         assert_eq!(data.extract_field_value("nonexistent"), None);
     }
 
@@ -197,7 +219,10 @@ mod models_tests {
         let processed = data.process(&config);
         assert_eq!(processed.formatted_data, "test-instance|aws");
         assert_eq!(processed.extracted_fields.len(), 2);
-        assert_eq!(processed.instance_id, Some("i-1234567890abcdef0".to_string()));
+        assert_eq!(
+            processed.instance_id,
+            Some("i-1234567890abcdef0".to_string())
+        );
     }
 
     #[test]
@@ -242,16 +267,24 @@ mod models_tests {
 
         let data: PhoneHomeData = serde_json::from_value(json_data).unwrap();
 
-        assert_eq!(data.extract_field_value("custom_field"), Some("custom_value".to_string()));
-        assert_eq!(data.extract_field_value("numeric_field"), Some("12345".to_string()));
-        assert_eq!(data.extract_field_value("boolean_field"), Some("true".to_string()));
+        assert_eq!(
+            data.extract_field_value("custom_field"),
+            Some("custom_value".to_string())
+        );
+        assert_eq!(
+            data.extract_field_value("numeric_field"),
+            Some("12345".to_string())
+        );
+        assert_eq!(
+            data.extract_field_value("boolean_field"),
+            Some("true".to_string())
+        );
     }
 }
 
 #[cfg(test)]
 mod tls_tests {
-    use super::*;
-    use phonehome::tls::{validate_tls_config, generate_self_signed_cert};
+    use phonehome::tls::generate_self_signed_cert;
     use tempfile::TempDir;
 
     #[tokio::test]
@@ -274,59 +307,6 @@ mod tls_tests {
         assert!(cert_content.contains("-----END CERTIFICATE-----"));
         assert!(key_content.contains("-----BEGIN PRIVATE KEY-----"));
         assert!(key_content.contains("-----END PRIVATE KEY-----"));
-    }
-
-    #[tokio::test]
-    async fn test_validate_tls_config_file_based() {
-        let temp_dir = TempDir::new().unwrap();
-        let cert_path = temp_dir.path().join("cert.pem");
-        let key_path = temp_dir.path().join("key.pem");
-
-        // Generate test certificates
-        generate_self_signed_cert("test.example.com", &cert_path, &key_path).await.unwrap();
-
-        let config = TlsConfig {
-            cert_path,
-            key_path,
-        };
-
-        let result = validate_tls_config(&config).await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_validate_tls_config_letsencrypt() {
-        let config = TlsConfig {
-            cert_path: "/nonexistent/cert.pem".into(),
-            key_path: "/nonexistent/key.pem".into(),
-        };
-
-        let result = validate_tls_config(&config).await;
-        assert!(result.is_ok()); // Should pass validation even if certs don't exist
-    }
-
-    #[tokio::test]
-    async fn test_validate_tls_config_letsencrypt_missing_domain() {
-        let config = TlsConfig {
-            cert_path: "/nonexistent/cert.pem".into(),
-            key_path: "/nonexistent/key.pem".into(),
-        };
-
-        let result = validate_tls_config(&config).await;
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Domain is required"));
-    }
-
-    #[tokio::test]
-    async fn test_validate_tls_config_missing_files() {
-        let config = TlsConfig {
-            cert_path: "/nonexistent/cert.pem".into(),
-            key_path: "/nonexistent/key.pem".into(),
-        };
-
-        let result = validate_tls_config(&config).await;
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("does not exist"));
     }
 }
 
@@ -413,7 +393,9 @@ mod integration_tests {
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
 
         assert!(body_str.contains("\"status\":\"ok\""));
@@ -435,7 +417,9 @@ mod integration_tests {
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
 
         assert!(body_str.contains("\"status\":\"success\""));
@@ -491,7 +475,9 @@ mod integration_tests {
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
 
         assert!(body_str.contains("\"status\":\"success\""));
@@ -549,16 +535,17 @@ mod load_tests {
             let mut data = phone_home_data.clone();
             data["instance_id"] = json!(format!("i-load-test-{:03}", i));
 
-            let task: tokio::task::JoinHandle<Result<axum::response::Response, _>> = tokio::spawn(async move {
-                let request = Request::builder()
-                    .uri("/phone-home/test-token-123")
-                    .method("POST")
-                    .header("content-type", "application/json")
-                    .body(Body::from(serde_json::to_string(&data).unwrap()))
-                    .unwrap();
+            let task: tokio::task::JoinHandle<Result<axum::response::Response, _>> =
+                tokio::spawn(async move {
+                    let request = Request::builder()
+                        .uri("/phone-home/test-token-123")
+                        .method("POST")
+                        .header("content-type", "application/json")
+                        .body(Body::from(serde_json::to_string(&data).unwrap()))
+                        .unwrap();
 
-                app_clone.oneshot(request).await
-            });
+                    app_clone.oneshot(request).await
+                });
 
             tasks.push(task);
         }
@@ -587,7 +574,11 @@ mod load_tests {
 
         assert_eq!(success_count, request_count);
         assert_eq!(failure_count, 0);
-        assert!(duration.as_secs() < 10, "Load test took too long: {:?}", duration);
+        assert!(
+            duration.as_secs() < 10,
+            "Load test took too long: {:?}",
+            duration
+        );
     }
 
     #[tokio::test]
@@ -601,14 +592,15 @@ mod load_tests {
         for _ in 0..request_count {
             let app_clone = app.clone();
 
-            let task: tokio::task::JoinHandle<Result<axum::response::Response, _>> = tokio::spawn(async move {
-                let request = Request::builder()
-                    .uri("/health")
-                    .body(Body::empty())
-                    .unwrap();
+            let task: tokio::task::JoinHandle<Result<axum::response::Response, _>> =
+                tokio::spawn(async move {
+                    let request = Request::builder()
+                        .uri("/health")
+                        .body(Body::empty())
+                        .unwrap();
 
-                app_clone.oneshot(request).await
-            });
+                    app_clone.oneshot(request).await
+                });
 
             tasks.push(task);
         }
@@ -616,29 +608,30 @@ mod load_tests {
         let results = join_all(tasks).await;
         let duration = start_time.elapsed();
 
-        let success_count = results.iter()
-            .filter(|result| {
-                matches!(result, Ok(Ok(response)) if response.status().is_success())
-            })
+        let success_count = results
+            .iter()
+            .filter(|result| matches!(result, Ok(Ok(response)) if response.status().is_success()))
             .count();
 
         println!("Health endpoint test completed in {:?}", duration);
         println!("Success rate: {}/{}", success_count, request_count);
 
         assert_eq!(success_count, request_count);
-        assert!(duration.as_secs() < 5, "Health endpoint test took too long: {:?}", duration);
+        assert!(
+            duration.as_secs() < 5,
+            "Health endpoint test took too long: {:?}",
+            duration
+        );
     }
 }
 
-mod development_mode_tests {
+mod certificate_tests {
     use super::*;
-    use std::path::PathBuf;
+    use phonehome::tls::{generate_self_signed_cert, setup_tls_config};
     use tempfile::TempDir;
 
     #[tokio::test]
     async fn test_self_signed_cert_generation() {
-        use phonehome::tls::generate_self_signed_cert;
-
         let temp_dir = TempDir::new().unwrap();
         let cert_path = temp_dir.path().join("test_cert.pem");
         let key_path = temp_dir.path().join("test_key.pem");
@@ -660,31 +653,46 @@ mod development_mode_tests {
         assert!(key_content.contains("-----END PRIVATE KEY-----"));
     }
 
-    #[test]
-    fn test_dev_mode_url_generation() {
-        let config = create_test_config();
-        let url_dev = config.get_phone_home_url(true);
-        let url_prod = config.get_phone_home_url(false);
+    #[tokio::test]
+    async fn test_setup_tls_config_with_existing_certs() {
+        let temp_dir = TempDir::new().unwrap();
+        let cert_path = temp_dir.path().join("cert.pem");
+        let key_path = temp_dir.path().join("key.pem");
 
-        assert!(url_dev.starts_with("https://"));
-        assert!(url_prod.starts_with("http://")); // No TLS in test config
-        assert!(url_dev.contains(&config.server.token));
+        // Generate test certificates first
+        generate_self_signed_cert("test.example.com", &cert_path, &key_path)
+            .await
+            .unwrap();
+
+        let config = TlsConfig {
+            cert_path,
+            key_path,
+        };
+
+        let result = setup_tls_config(&config).await;
+        assert!(result.is_ok());
     }
 
-    #[test]
-    fn test_get_dev_cert_paths() {
-        use phonehome::config::Config;
-        let (cert_path, key_path) = Config::get_dev_cert_paths();
-        assert_eq!(cert_path, PathBuf::from("dev_cert.pem"));
-        assert_eq!(key_path, PathBuf::from("dev_key.pem"));
-    }
+    #[tokio::test]
+    async fn test_setup_tls_config_generates_missing_certs() {
+        let temp_dir = TempDir::new().unwrap();
+        let cert_path = temp_dir.path().join("cert.pem");
+        let key_path = temp_dir.path().join("key.pem");
 
-    #[test]
-    fn test_cargo_detection() {
-        use phonehome::config::Config;
-        // This test will pass when run under cargo
-        let is_cargo = Config::is_running_under_cargo();
-        // We can't guarantee the result, but we can test that the function exists
-        assert!(is_cargo || !is_cargo); // Always true, just testing the function
+        let config = TlsConfig {
+            cert_path: cert_path.clone(),
+            key_path: key_path.clone(),
+        };
+
+        // Certificates don't exist initially
+        assert!(!cert_path.exists());
+        assert!(!key_path.exists());
+
+        let result = setup_tls_config(&config).await;
+        assert!(result.is_ok());
+
+        // Certificates should now exist
+        assert!(cert_path.exists());
+        assert!(key_path.exists());
     }
 }

@@ -1,0 +1,220 @@
+name: CI/CD Pipeline
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  PACKAGE_NAME: phonehome
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION=${VERSION#v}  # Remove 'v' prefix if present
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          components: clippy, rustfmt
+
+      - name: Cache cargo dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Run clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Run tests
+        run: cargo test --verbose
+
+      - name: Build release binary
+        run: |
+          cargo build --release
+          strip target/release/${{ env.PACKAGE_NAME }}
+
+      - name: Create binary artifact
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BINARY_NAME="${{ env.PACKAGE_NAME }}-${VERSION}-linux-x86_64"
+          cp target/release/${{ env.PACKAGE_NAME }} "$BINARY_NAME"
+          echo "Binary created: $BINARY_NAME"
+
+      - name: Upload binary as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}-${{ steps.version.outputs.version }}-binary
+          path: ${{ env.PACKAGE_NAME }}-${{ steps.version.outputs.version }}-linux-x86_64
+
+      - name: Upload binary to release
+        if: github.event_name == 'release'
+        run: |
+          BINARY_NAME="${{ env.PACKAGE_NAME }}-${{ steps.version.outputs.version }}-linux-x86_64"
+          
+          echo "Uploading binary to release ${{ github.event.release.tag_name }}..."
+          if ! gh release upload ${{ github.event.release.tag_name }} \
+            "$BINARY_NAME" \
+            --clobber; then
+            echo "Failed to upload binary to release"
+            exit 1
+          fi
+          echo "Binary successfully uploaded to release"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  create-tarball:
+    name: Create and Upload Tarball
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    outputs:
+      tarball-name: ${{ steps.tarball.outputs.tarball-name }}
+      tarball-path: ${{ steps.tarball.outputs.tarball-path }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Update spec file version
+        run: |
+          sed -i "s/^Version:.*/Version:        ${{ needs.build-and-test.outputs.version }}/" ${{ env.PACKAGE_NAME }}.spec
+
+      - name: Create tarball
+        id: tarball
+        uses: ./.github/actions/create-tarball
+        with:
+          package-name: ${{ env.PACKAGE_NAME }}
+          version: ${{ needs.build-and-test.outputs.version }}
+
+      - name: Upload tarball as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}-${{ needs.build-and-test.outputs.version }}-source
+          path: ${{ steps.tarball.outputs.tarball-path }}
+
+      - name: Upload tarball to release
+        if: github.event_name == 'release'
+        run: |
+          TARBALL_NAME="${{ steps.tarball.outputs.tarball-name }}"
+          
+          # Verify tarball exists
+          if [ ! -f "$TARBALL_NAME" ]; then
+            echo "Error: Tarball $TARBALL_NAME not found"
+            exit 1
+          fi
+
+          echo "Uploading tarball to release ${{ github.event.release.tag_name }}..."
+          if ! gh release upload ${{ github.event.release.tag_name }} \
+            "$TARBALL_NAME" \
+            --clobber; then
+            echo "Failed to upload tarball to release"
+            exit 1
+          fi
+          echo "Tarball successfully uploaded to release"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  trigger-copr:
+    name: Trigger COPR Build
+    runs-on: ubuntu-latest
+    needs: [build-and-test, create-tarball]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install COPR CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip
+          pip3 install copr-cli
+
+      - name: Configure COPR CLI
+        run: |
+          mkdir -p ~/.config
+          cat > ~/.config/copr << EOF
+          [copr-cli]
+          login = ${{ secrets.COPR_LOGIN }}
+          username = ${{ secrets.COPR_USERNAME }}
+          token = ${{ secrets.COPR_TOKEN }}
+          copr_url = https://copr.fedorainfracloud.org
+          EOF
+
+      - name: Submit COPR build
+        run: |
+          # Validate required variables and secrets
+          if [ -z "${{ vars.COPR_PROJECT }}" ]; then
+            echo "Error: COPR_PROJECT variable is not set. Should be in format 'username/projectname'"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.COPR_LOGIN }}" ] || [ -z "${{ secrets.COPR_TOKEN }}" ]; then
+            echo "Error: COPR authentication secrets (COPR_LOGIN, COPR_TOKEN) are not set"
+            exit 1
+          fi
+
+          # Set commit reference
+          if [ "${{ github.event_name }}" = "release" ]; then
+            COMMIT_REF="${{ github.event.release.tag_name }}"
+          else
+            COMMIT_REF="${{ github.sha }}"
+          fi
+
+          # Debug output
+          echo "COPR Project: ${{ vars.COPR_PROJECT }}"
+          echo "Clone URL: ${{ github.server_url }}/${{ github.repository }}"
+          echo "Commit Reference: $COMMIT_REF"
+          echo "Spec File: ${{ env.PACKAGE_NAME }}.spec"
+          echo "Version: ${{ needs.build-and-test.outputs.version }}"
+
+          # Test COPR authentication first
+          echo "Testing COPR authentication..."
+          copr-cli whoami
+
+          # Submit build to COPR using buildscm (builds directly from git repository)
+          echo "Submitting build to COPR..."
+          copr-cli buildscm "${{ vars.COPR_PROJECT }}" \
+            --clone-url "${{ github.server_url }}/${{ github.repository }}" \
+            --commit "$COMMIT_REF" \
+            --spec "${{ env.PACKAGE_NAME }}.spec" \
+            --nowait
+
+      - name: Build result
+        run: |
+          echo "COPR build submitted for version ${{ needs.build-and-test.outputs.version }}"
+          echo "Check build status at: https://copr.fedorainfracloud.org/coprs/${{ vars.COPR_PROJECT }}/builds/"

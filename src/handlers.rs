@@ -22,7 +22,10 @@ pub async fn phone_home_handler(
     JsonExtractor(payload): JsonExtractor<Value>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     info!("Received phone home request with token: {}", token);
-    debug!("Phone home payload: {}", serde_json::to_string_pretty(&payload).unwrap_or_default());
+    debug!(
+        "Phone home payload: {}",
+        serde_json::to_string_pretty(&payload).unwrap_or_default()
+    );
 
     // Verify token
     if token != state.config.server.token {
@@ -121,7 +124,7 @@ async fn execute_external_app(
 
     // Execute with timeout
     let timeout_duration = Duration::from_secs(config.timeout_seconds);
-    
+
     let result = timeout(timeout_duration, cmd.output()).await;
 
     match result {
@@ -180,7 +183,7 @@ pub async fn validate_external_app(
     }
 
     let timeout_duration = Duration::from_secs(5); // Short timeout for validation
-    
+
     match timeout(timeout_duration, cmd.output()).await {
         Ok(Ok(_)) => {
             info!("External application validation successful");
@@ -192,7 +195,10 @@ pub async fn validate_external_app(
                 error!("{}", error_msg);
                 Err(error_msg.into())
             } else {
-                warn!("External application validation failed, but command exists: {}", err);
+                warn!(
+                    "External application validation failed, but command exists: {}",
+                    err
+                );
                 // Don't fail validation for other errors (like --version not supported)
                 Ok(())
             }
@@ -210,7 +216,6 @@ mod tests {
     use super::*;
     use crate::config::ExternalAppConfig;
     use std::collections::HashMap;
-
 
     #[tokio::test]
     async fn test_execute_external_app_success() {

@@ -7,7 +7,7 @@ _phonehome() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # All available options
-    opts="-c --config -p --port -d --debug --dev-mode -h --help -V --version"
+    opts="-c --config -p --port -d --debug -h --help -V --version"
 
     case "${prev}" in
         -c|--config)

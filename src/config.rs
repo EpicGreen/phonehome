@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use tokio::fs;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -50,8 +50,8 @@ impl Default for Config {
                 token: "your-secret-token-here".to_string(),
             },
             tls: Some(TlsConfig {
-                cert_path: PathBuf::from("/etc/letsencrypt/live/your-domain.com/fullchain.pem"),
-                key_path: PathBuf::from("/etc/letsencrypt/live/your-domain.com/privkey.pem"),
+                cert_path: PathBuf::from("cert.pem"),
+                key_path: PathBuf::from("key.pem"),
             }),
             external_app: ExternalAppConfig {
                 command: "/usr/local/bin/process-phone-home".to_string(),
@@ -80,9 +80,15 @@ impl Config {
         let path = path.as_ref();
 
         if !path.exists() {
-            tracing::warn!("Configuration file {:?} does not exist, creating default config", path);
+            tracing::warn!(
+                "Configuration file {:?} does not exist, creating default config",
+                path
+            );
             let default_config = Self::default();
-            default_config.save(path).await.context("Failed to save default configuration")?;
+            default_config
+                .save(path)
+                .await
+                .context("Failed to save default configuration")?;
             return Ok(default_config);
         }
 
@@ -93,7 +99,9 @@ impl Config {
         let config: Config = toml::from_str(&content)
             .with_context(|| format!("Failed to parse configuration file: {:?}", path))?;
 
-        config.validate().context("Configuration validation failed")?;
+        config
+            .validate()
+            .context("Configuration validation failed")?;
 
         Ok(config)
     }
@@ -107,8 +115,8 @@ impl Config {
                 .with_context(|| format!("Failed to create config directory: {:?}", parent))?;
         }
 
-        let content = toml::to_string_pretty(self)
-            .context("Failed to serialize configuration to TOML")?;
+        let content =
+            toml::to_string_pretty(self).context("Failed to serialize configuration to TOML")?;
 
         fs::write(path, content)
             .await
@@ -131,15 +139,7 @@ impl Config {
             anyhow::bail!("Server port must be greater than 0");
         }
 
-        // Validate TLS configuration if present
-        if let Some(ref tls) = self.tls {
-            if !tls.cert_path.exists() {
-                anyhow::bail!("TLS certificate file does not exist: {:?}", tls.cert_path);
-            }
-            if !tls.key_path.exists() {
-                anyhow::bail!("TLS private key file does not exist: {:?}", tls.key_path);
-            }
-        }
+        // TLS configuration validation is handled during server startup
 
         // Validate external app configuration
         if self.external_app.command.is_empty() {
@@ -152,41 +152,21 @@ impl Config {
 
         // Validate phone home configuration
         if self.phone_home.fields_to_extract.is_empty() {
-            tracing::warn!("No fields configured for extraction - external app will receive empty data");
+            tracing::warn!(
+                "No fields configured for extraction - external app will receive empty data"
+            );
         }
 
         Ok(())
     }
 
-    pub fn get_phone_home_url(&self, dev_mode: bool) -> String {
-        let use_https = self.tls.is_some() || dev_mode;
+    pub fn get_phone_home_url(&self) -> String {
+        let use_https = self.tls.is_some();
         let scheme = if use_https { "https" } else { "http" };
-        format!("{}://{}:{}/phone-home/{}",
-                scheme,
-                self.server.host,
-                self.server.port,
-                self.server.token)
-    }
-
-    pub fn is_running_under_cargo() -> bool {
-        // Check for cargo environment variables that are set when running under cargo
-        if std::env::var("CARGO_PKG_NAME").is_ok() {
-            return true;
-        }
-
-        // Check if executable path indicates cargo build
-        if let Ok(exe_path) = std::env::current_exe() {
-            let path_str = exe_path.to_string_lossy();
-            if path_str.contains("target/debug") || path_str.contains("target/release") {
-                return true;
-            }
-        }
-
-        false
-    }
-
-    pub fn get_dev_cert_paths() -> (PathBuf, PathBuf) {
-        (PathBuf::from("dev_cert.pem"), PathBuf::from("dev_key.pem"))
+        format!(
+            "{}://{}:{}/phone-home/{}",
+            scheme, self.server.host, self.server.port, self.server.token
+        )
     }
 }
 
@@ -232,26 +212,8 @@ mod tests {
     #[test]
     fn test_phone_home_url_generation() {
         let config = Config::default();
-        let url = config.get_phone_home_url(false);
+        let url = config.get_phone_home_url();
         assert!(url.starts_with("https://"));
         assert!(url.contains(&config.server.token));
-    }
-
-    #[test]
-    fn test_dev_mode_url_generation() {
-        let config = Config::default();
-        let url_dev = config.get_phone_home_url(true);
-        let url_prod = config.get_phone_home_url(false);
-
-        assert!(url_dev.starts_with("https://"));
-        assert!(url_prod.starts_with("https://")); // Due to default TLS config
-        assert!(url_dev.contains(&config.server.token));
-    }
-
-    #[test]
-    fn test_get_dev_cert_paths() {
-        let (cert_path, key_path) = Config::get_dev_cert_paths();
-        assert_eq!(cert_path, PathBuf::from("dev_cert.pem"));
-        assert_eq!(key_path, PathBuf::from("dev_key.pem"));
     }
 }

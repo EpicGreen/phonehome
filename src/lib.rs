@@ -12,8 +12,8 @@ pub use config::Config;
 pub use handlers::phone_home_handler;
 pub use models::{PhoneHomeData, ProcessedPhoneHomeData};
 
-use std::sync::Arc;
 use axum::{http::StatusCode, response::Json};
+use std::sync::Arc;
 
 /// Application state shared across handlers
 #[derive(Clone)]
