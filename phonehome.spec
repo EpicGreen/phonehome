@@ -1,5 +1,5 @@
 Name:           phonehome
-Version:        0.1.1
+Version:        0.1.2
 Release:        1%{?dist}
 Summary:        Secure HTTPS server for Cloud Init phone home requests
 
@@ -55,7 +55,7 @@ install -d %{buildroot}%{_bindir}                                   # /usr/bin
 install -d %{buildroot}%{_sysconfdir}/%{name}                       # /etc/phonehome
 install -d %{buildroot}%{_localstatedir}/lib/%{name}                # /var/lib/phonehome
 install -d %{buildroot}%{_localstatedir}/log/%{name}                # /var/log/phonehome
-install -d %{buildroot}%{_unitdir}/system/                          # /usr/lib/systemd/system/
+install -d %{buildroot}%{_unitdir}/                                 # /usr/lib/systemd/system/
 install -d %{buildroot}%{_datadir}/bash-completion/completions      # /usr/share/bash-completion/completions
 install -d %{buildroot}%{_docdir}/%{name}                           # /usr/share/doc/phonehome
 install -d %{buildroot}%{_docdir}/%{name}/examples                  # /usr/share/doc/phonehome/examples
@@ -63,11 +63,8 @@ install -d %{buildroot}%{_docdir}/%{name}/examples                  # /usr/share
 # Install main binary to /usr/bin
 install -m 0755 target/release/%{name} %{buildroot}%{_bindir}/%{name}
 
-# Install configuration file to /etc/phonehome
-install -m 0640 etc/phonehome/config.toml %{buildroot}%{_sysconfdir}/phonehome/config.toml
-
 # Install systemd service file to /usr/lib/systemd/system
-install -m 0644 usr/lib/systemd/system/%{name}.service %{buildroot}%{_unitdir}/system/%{name}.service
+install -m 0644 usr/lib/systemd/system/%{name}.service %{buildroot}%{_unitdir}/%{name}.service
 
 # Install bash completion to /usr/share/bash-completion/completions
 install -m 0644 etc/bash-completion/phonehome %{buildroot}%{_datadir}/bash-completion/completions/phonehome
@@ -124,8 +121,12 @@ fi
 %doc %{_docdir}/%{name}/examples/database_logger.sh
 %doc %{_docdir}/%{name}/examples/webhook_notifier.sh
 %{_bindir}/%{name}
+%{_unitdir}/%{name}.service
 %config(noreplace) %{_sysconfdir}/%{name}/config.toml
 %{_datadir}/bash-completion/completions/%{name}
+%dir %attr(750,phonehome,phonehome) %{_localstatedir}/lib/%{name}
+%dir %attr(750,phonehome,phonehome) %{_localstatedir}/log/%{name}
+%dir %attr(750,root,phonehome) %{_sysconfdir}/%{name}
 
 %changelog
 * Wed Sep 3 2025 Ante de Baas <packages@debaas.net> - 0.1.1-1
