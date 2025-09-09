@@ -7,8 +7,9 @@ use tracing::{debug, warn};
 /// Landing page handler for the root path
 pub async fn landing_page() -> Html<&'static str> {
     debug!("Landing page accessed");
-    
-    Html(r#"<!DOCTYPE html>
+
+    Html(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -123,14 +124,16 @@ phone_home:
         </div>
     </div>
 </body>
-</html>"#)
+</html>"#,
+    )
 }
 
 /// Handle 404 Not Found errors
 pub async fn not_found() -> Response {
     warn!("404 Not Found: Invalid endpoint accessed");
-    
-    let html = Html(r#"<!DOCTYPE html>
+
+    let html = Html(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -214,7 +217,8 @@ pub async fn not_found() -> Response {
         </p>
     </div>
 </body>
-</html>"#);
+</html>"#,
+    );
 
     (StatusCode::NOT_FOUND, html).into_response()
 }
@@ -222,8 +226,9 @@ pub async fn not_found() -> Response {
 /// Handle 400 Bad Request errors
 pub async fn bad_request() -> Response {
     warn!("400 Bad Request: Malformed request received");
-    
-    let html = Html(r#"<!DOCTYPE html>
+
+    let html = Html(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -308,7 +313,8 @@ pub async fn bad_request() -> Response {
         </p>
     </div>
 </body>
-</html>"#);
+</html>"#,
+    );
 
     (StatusCode::BAD_REQUEST, html).into_response()
 }
@@ -316,8 +322,9 @@ pub async fn bad_request() -> Response {
 /// Handle 401 Unauthorized errors
 pub async fn unauthorized() -> Response {
     warn!("401 Unauthorized: Invalid authentication token");
-    
-    let html = Html(r#"<!DOCTYPE html>
+
+    let html = Html(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -402,7 +409,8 @@ pub async fn unauthorized() -> Response {
         </p>
     </div>
 </body>
-</html>"#);
+</html>"#,
+    );
 
     (StatusCode::UNAUTHORIZED, html).into_response()
 }
@@ -410,8 +418,9 @@ pub async fn unauthorized() -> Response {
 /// Handle 500 Internal Server Error
 pub async fn internal_server_error() -> Response {
     warn!("500 Internal Server Error: Server encountered an error");
-    
-    let html = Html(r#"<!DOCTYPE html>
+
+    let html = Html(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -487,7 +496,8 @@ pub async fn internal_server_error() -> Response {
         </p>
     </div>
 </body>
-</html>"#);
+</html>"#,
+    );
 
     (StatusCode::INTERNAL_SERVER_ERROR, html).into_response()
 }
@@ -495,8 +505,9 @@ pub async fn internal_server_error() -> Response {
 /// Handle method not allowed errors (405)
 pub async fn method_not_allowed() -> Response {
     warn!("405 Method Not Allowed: Invalid HTTP method used");
-    
-    let html = Html(r#"<!DOCTYPE html>
+
+    let html = Html(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -580,7 +591,8 @@ pub async fn method_not_allowed() -> Response {
         </p>
     </div>
 </body>
-</html>"#);
+</html>"#,
+    );
 
     (StatusCode::METHOD_NOT_ALLOWED, html).into_response()
 }

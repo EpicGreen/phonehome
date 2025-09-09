@@ -26,15 +26,18 @@ pub struct AppState {
 /// Health check endpoint handler
 pub async fn health_check() -> Result<Json<serde_json::Value>, StatusCode> {
     debug!("Health check endpoint accessed");
-    
+
     let response = serde_json::json!({
         "status": "ok",
         "service": "phonehome",
         "timestamp": chrono::Utc::now().to_rfc3339()
     });
-    
+
     info!("Health check successful");
-    debug!("Health check response: {}", serde_json::to_string_pretty(&response).unwrap_or_default());
-    
+    debug!(
+        "Health check response: {}",
+        serde_json::to_string_pretty(&response).unwrap_or_default()
+    );
+
     Ok(Json(response))
 }

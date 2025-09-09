@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tokio::fs;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
@@ -180,7 +180,10 @@ impl Config {
         if self.server.token == "your-secret-token-here" {
             warn!("Using default token - please change this for production use");
         } else {
-            debug!("Server token is configured (length: {})", self.server.token.len());
+            debug!(
+                "Server token is configured (length: {})",
+                self.server.token.len()
+            );
         }
 
         if self.server.port == 0 {
@@ -192,7 +195,10 @@ impl Config {
         // TLS configuration validation
         debug!("Validating TLS configuration");
         if let Some(ref tls) = self.tls {
-            debug!("TLS enabled - cert: {:?}, key: {:?}", tls.cert_path, tls.key_path);
+            debug!(
+                "TLS enabled - cert: {:?}, key: {:?}",
+                tls.cert_path, tls.key_path
+            );
         } else {
             debug!("TLS disabled - server will run in HTTP mode");
         }
@@ -205,7 +211,10 @@ impl Config {
         }
         debug!("External app command: {}", self.external_app.command);
         debug!("External app args: {:?}", self.external_app.args);
-        debug!("External app timeout: {} seconds", self.external_app.timeout_seconds);
+        debug!(
+            "External app timeout: {} seconds",
+            self.external_app.timeout_seconds
+        );
 
         if self.external_app.timeout_seconds == 0 {
             error!("External application timeout must be greater than 0");
@@ -233,7 +242,10 @@ impl Config {
                 debug!("Log level validation passed: {}", self.logging.log_level);
             }
             _ => {
-                error!("Invalid log level: {}. Must be one of: trace, debug, info, warn, error", self.logging.log_level);
+                error!(
+                    "Invalid log level: {}. Must be one of: trace, debug, info, warn, error",
+                    self.logging.log_level
+                );
                 anyhow::bail!("Invalid log level: {}", self.logging.log_level);
             }
         }
@@ -249,14 +261,18 @@ impl Config {
         debug!("Fields to extract: {:?}", self.phone_home.fields_to_extract);
         debug!("Field separator: '{}'", self.phone_home.field_separator);
         debug!("Include timestamp: {}", self.phone_home.include_timestamp);
-        debug!("Include instance ID: {}", self.phone_home.include_instance_id);
+        debug!(
+            "Include instance ID: {}",
+            self.phone_home.include_instance_id
+        );
 
         if self.phone_home.fields_to_extract.is_empty() {
-            warn!(
-                "No fields configured for extraction - external app will receive empty data"
-            );
+            warn!("No fields configured for extraction - external app will receive empty data");
         } else {
-            info!("Configured to extract {} fields", self.phone_home.fields_to_extract.len());
+            info!(
+                "Configured to extract {} fields",
+                self.phone_home.fields_to_extract.len()
+            );
         }
 
         info!("Configuration validation completed successfully");

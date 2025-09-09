@@ -177,7 +177,7 @@ impl PhoneHomeData {
     /// Extract field values based on configuration
     pub fn extract_field_value(&self, field_name: &str) -> Option<String> {
         debug!("Extracting field value for: '{}'", field_name);
-        
+
         let result = match field_name {
             "instance_id" => self.instance_id.clone(),
             "hostname" => self.hostname.clone(),
@@ -226,12 +226,12 @@ impl PhoneHomeData {
                     })
             }
         };
-        
+
         match &result {
             Some(value) => debug!("Field '{}' extracted: '{}'", field_name, value),
             None => debug!("Field '{}' not found or empty", field_name),
         }
-        
+
         result
     }
 
@@ -240,7 +240,7 @@ impl PhoneHomeData {
         info!("Starting phone home data processing");
         debug!("Processing configuration: {:#?}", config);
         debug!("Raw phone home data: {:#?}", self);
-        
+
         let mut extracted_fields = Vec::new();
 
         // Add timestamp if configured
@@ -266,9 +266,17 @@ impl PhoneHomeData {
         }
 
         // Extract configured fields
-        debug!("Extracting {} configured fields", config.fields_to_extract.len());
+        debug!(
+            "Extracting {} configured fields",
+            config.fields_to_extract.len()
+        );
         for (index, field_name) in config.fields_to_extract.iter().enumerate() {
-            debug!("Processing field {}/{}: '{}'", index + 1, config.fields_to_extract.len(), field_name);
+            debug!(
+                "Processing field {}/{}: '{}'",
+                index + 1,
+                config.fields_to_extract.len(),
+                field_name
+            );
             let value = self.extract_field_value(field_name).unwrap_or_default();
             if value.is_empty() {
                 warn!("Field '{}' extracted as empty value", field_name);
@@ -277,10 +285,17 @@ impl PhoneHomeData {
         }
 
         // Format the data string
-        debug!("Formatting {} extracted fields with separator: '{}'", extracted_fields.len(), config.field_separator);
+        debug!(
+            "Formatting {} extracted fields with separator: '{}'",
+            extracted_fields.len(),
+            config.field_separator
+        );
         let formatted_data = extracted_fields.join(&config.field_separator);
         debug!("Formatted data result: '{}'", formatted_data);
-        info!("Data processing completed - extracted {} fields", extracted_fields.len());
+        info!(
+            "Data processing completed - extracted {} fields",
+            extracted_fields.len()
+        );
 
         let processed_data = ProcessedPhoneHomeData {
             timestamp: Utc::now(),
@@ -289,7 +304,7 @@ impl PhoneHomeData {
             formatted_data,
             raw_data: self.clone(),
         };
-        
+
         debug!("Final processed data: {:#?}", processed_data);
         processed_data
     }

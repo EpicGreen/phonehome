@@ -24,19 +24,31 @@ pub async fn phone_home_handler(
 ) -> Response {
     // Generate correlation ID for this request
     let correlation_id = Uuid::new_v4();
-    
-    info!("Received phone home request [{}] with token: {}", correlation_id, token);
+
+    info!(
+        "Received phone home request [{}] with token: {}",
+        correlation_id, token
+    );
     debug!(
         "[{}] Phone home payload: {}",
         correlation_id,
         serde_json::to_string_pretty(&payload).unwrap_or_default()
     );
-    debug!("[{}] Request size: {} bytes", correlation_id, serde_json::to_string(&payload).map(|s| s.len()).unwrap_or(0));
+    debug!(
+        "[{}] Request size: {} bytes",
+        correlation_id,
+        serde_json::to_string(&payload)
+            .map(|s| s.len())
+            .unwrap_or(0)
+    );
 
     // Verify token
     if token != state.config.server.token {
         warn!("[{}] Invalid token provided: {}", correlation_id, token);
-        error!("[{}] Authentication failed - rejecting request", correlation_id);
+        error!(
+            "[{}] Authentication failed - rejecting request",
+            correlation_id
+        );
         return web::unauthorized().await;
     }
     debug!("[{}] Token authentication successful", correlation_id);
@@ -47,27 +59,30 @@ pub async fn phone_home_handler(
         Ok(data) => {
             debug!("[{}] Phone home data parsed successfully", correlation_id);
             data
-        },
+        }
         Err(err) => {
-            error!("[{}] Failed to parse phone home data: {}", correlation_id, err);
+            error!(
+                "[{}] Failed to parse phone home data: {}",
+                correlation_id, err
+            );
             return web::bad_request().await;
         }
     };
 
     info!(
         "[{}] Processing phone home data for instance: {:?}",
-        correlation_id,
-        phone_home_data.instance_id
+        correlation_id, phone_home_data.instance_id
     );
-    debug!("[{}] Instance data: hostname={:?}, fqdn={:?}, cloud={:?}", 
-        correlation_id,
-        phone_home_data.hostname,
-        phone_home_data.fqdn,
-        phone_home_data.cloud_name
+    debug!(
+        "[{}] Instance data: hostname={:?}, fqdn={:?}, cloud={:?}",
+        correlation_id, phone_home_data.hostname, phone_home_data.fqdn, phone_home_data.cloud_name
     );
 
     // Process the data according to configuration
-    debug!("[{}] Starting data processing with configuration", correlation_id);
+    debug!(
+        "[{}] Starting data processing with configuration",
+        correlation_id
+    );
     let processed_data = phone_home_data.process(&state.config.phone_home);
 
     info!(
@@ -76,18 +91,29 @@ pub async fn phone_home_handler(
         processed_data.extracted_fields.len(),
         processed_data.formatted_data
     );
-    debug!("[{}] Extracted fields: {:?}", correlation_id, processed_data.extracted_fields);
+    debug!(
+        "[{}] Extracted fields: {:?}",
+        correlation_id, processed_data.extracted_fields
+    );
 
     // Execute external application
     debug!("[{}] Executing external application", correlation_id);
-    match execute_external_app(&state.config.external_app, &processed_data.formatted_data, &correlation_id).await {
+    match execute_external_app(
+        &state.config.external_app,
+        &processed_data.formatted_data,
+        &correlation_id,
+    )
+    .await
+    {
         Ok(output) => {
             info!(
                 "[{}] External application executed successfully for instance: {:?}",
-                correlation_id,
-                processed_data.instance_id
+                correlation_id, processed_data.instance_id
             );
-            debug!("[{}] External application output: {}", correlation_id, output);
+            debug!(
+                "[{}] External application output: {}",
+                correlation_id, output
+            );
         }
         Err(err) => {
             error!(
@@ -107,10 +133,14 @@ pub async fn phone_home_handler(
         "processed_fields": processed_data.extracted_fields.len(),
         "correlation_id": correlation_id.to_string()
     });
-    
+
     info!("[{}] Request processed successfully", correlation_id);
-    debug!("[{}] Response: {}", correlation_id, serde_json::to_string_pretty(&response).unwrap_or_default());
-    
+    debug!(
+        "[{}] Response: {}",
+        correlation_id,
+        serde_json::to_string_pretty(&response).unwrap_or_default()
+    );
+
     Json(response).into_response()
 }
 
@@ -120,10 +150,16 @@ async fn execute_external_app(
     data: &str,
     correlation_id: &Uuid,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    info!("[{}] Executing external application: {}", correlation_id, config.command);
+    info!(
+        "[{}] Executing external application: {}",
+        correlation_id, config.command
+    );
     debug!("[{}] Command args: {:?}", correlation_id, config.args);
     debug!("[{}] Data to pass: '{}'", correlation_id, data);
-    debug!("[{}] Timeout: {} seconds", correlation_id, config.timeout_seconds);
+    debug!(
+        "[{}] Timeout: {} seconds",
+        correlation_id, config.timeout_seconds
+    );
 
     let mut cmd = Command::new(&config.command);
 
@@ -143,7 +179,11 @@ async fn execute_external_app(
 
     // Set environment variables if configured
     if let Some(ref env_vars) = config.environment {
-        debug!("[{}] Setting {} environment variables", correlation_id, env_vars.len());
+        debug!(
+            "[{}] Setting {} environment variables",
+            correlation_id,
+            env_vars.len()
+        );
         for (key, value) in env_vars {
             cmd.env(key, value);
             debug!("[{}] ENV: {}={}", correlation_id, key, value);
@@ -158,7 +198,10 @@ async fn execute_external_app(
 
     // Execute with timeout
     let timeout_duration = Duration::from_secs(config.timeout_seconds);
-    debug!("[{}] Starting external application with timeout: {:?}", correlation_id, timeout_duration);
+    debug!(
+        "[{}] Starting external application with timeout: {:?}",
+        correlation_id, timeout_duration
+    );
 
     let start_time = std::time::Instant::now();
     let result = timeout(timeout_duration, cmd.output()).await;
@@ -169,15 +212,24 @@ async fn execute_external_app(
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
 
-            debug!("[{}] External application completed in {:?}", correlation_id, execution_time);
+            debug!(
+                "[{}] External application completed in {:?}",
+                correlation_id, execution_time
+            );
             debug!("[{}] Exit status: {:?}", correlation_id, output.status);
             debug!("[{}] Stdout length: {} bytes", correlation_id, stdout.len());
             debug!("[{}] Stderr length: {} bytes", correlation_id, stderr.len());
 
             if output.status.success() {
-                info!("[{}] External application completed successfully in {:?}", correlation_id, execution_time);
+                info!(
+                    "[{}] External application completed successfully in {:?}",
+                    correlation_id, execution_time
+                );
                 if !stderr.is_empty() {
-                    debug!("[{}] External application stderr: {}", correlation_id, stderr);
+                    debug!(
+                        "[{}] External application stderr: {}",
+                        correlation_id, stderr
+                    );
                 }
                 Ok(stdout.to_string())
             } else {
@@ -192,7 +244,10 @@ async fn execute_external_app(
         }
         Ok(Err(err)) => {
             let error_msg = format!("Failed to execute external application: {}", err);
-            error!("[{}] {} (execution time: {:?})", correlation_id, error_msg, execution_time);
+            error!(
+                "[{}] {} (execution time: {:?})",
+                correlation_id, error_msg, execution_time
+            );
             Err(error_msg.into())
         }
         Err(_) => {
@@ -200,7 +255,10 @@ async fn execute_external_app(
                 "External application timed out after {} seconds",
                 config.timeout_seconds
             );
-            error!("[{}] {} (execution time: {:?})", correlation_id, error_msg, execution_time);
+            error!(
+                "[{}] {} (execution time: {:?})",
+                correlation_id, error_msg, execution_time
+            );
             Err(error_msg.into())
         }
     }
@@ -231,11 +289,20 @@ pub async fn validate_external_app(
     match timeout(timeout_duration, cmd.output()).await {
         Ok(Ok(output)) => {
             let validation_time = start_time.elapsed();
-            info!("External application validation successful in {:?}", validation_time);
+            info!(
+                "External application validation successful in {:?}",
+                validation_time
+            );
             debug!("Validation exit status: {:?}", output.status);
-            debug!("Validation stdout: {}", String::from_utf8_lossy(&output.stdout));
+            debug!(
+                "Validation stdout: {}",
+                String::from_utf8_lossy(&output.stdout)
+            );
             if !output.stderr.is_empty() {
-                debug!("Validation stderr: {}", String::from_utf8_lossy(&output.stderr));
+                debug!(
+                    "Validation stderr: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
             }
             Ok(())
         }
@@ -256,7 +323,10 @@ pub async fn validate_external_app(
         }
         Err(_) => {
             let validation_time = start_time.elapsed();
-            warn!("External application validation timed out after {:?}, but command may still work", validation_time);
+            warn!(
+                "External application validation timed out after {:?}, but command may still work",
+                validation_time
+            );
             // Don't fail validation for timeout
             Ok(())
         }

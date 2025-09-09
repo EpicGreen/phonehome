@@ -15,7 +15,7 @@ use crate::config::TlsConfig;
 pub async fn setup_tls_config(config: &TlsConfig) -> Result<()> {
     info!("Starting TLS configuration setup");
     debug!("TLS config: {:#?}", config);
-    
+
     let cert_path = &config.cert_path;
     let key_path = &config.key_path;
 
@@ -50,7 +50,7 @@ pub async fn setup_tls_config(config: &TlsConfig) -> Result<()> {
         if !key_path.exists() {
             debug!("Private key file not found: {:?}", key_path);
         }
-        
+
         info!("Certificate files not found, generating self-signed certificate...");
         generate_self_signed_cert("localhost", cert_path, key_path)
             .await
@@ -66,7 +66,7 @@ pub async fn setup_tls_config(config: &TlsConfig) -> Result<()> {
 async fn load_certs<P: AsRef<Path>>(path: P) -> Result<Vec<Certificate>> {
     let path = path.as_ref();
     debug!("Loading certificates from: {:?}", path);
-    
+
     let mut file = File::open(path)
         .await
         .with_context(|| format!("Failed to open certificate file: {:?}", path))?;
@@ -103,7 +103,7 @@ async fn load_certs<P: AsRef<Path>>(path: P) -> Result<Vec<Certificate>> {
 async fn load_private_key<P: AsRef<Path>>(path: P) -> Result<PrivateKey> {
     let path = path.as_ref();
     debug!("Loading private key from: {:?}", path);
-    
+
     let mut file = File::open(path)
         .await
         .with_context(|| format!("Failed to open private key file: {:?}", path))?;
@@ -181,7 +181,7 @@ pub async fn generate_self_signed_cert(
         .serialize_pem()
         .with_context(|| "Failed to serialize certificate")?;
     debug!("Certificate PEM size: {} bytes", cert_pem.len());
-    
+
     debug!("Serializing private key to PEM format");
     let key_pem = cert.serialize_private_key_pem();
     debug!("Private key PEM size: {} bytes", key_pem.len());

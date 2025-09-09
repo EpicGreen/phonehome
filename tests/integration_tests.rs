@@ -4,7 +4,9 @@ use axum::{
     Router,
 };
 use futures::future::join_all;
-use phonehome::config::{Config, ExternalAppConfig, LoggingConfig, PhoneHomeConfig, ServerConfig, TlsConfig};
+use phonehome::config::{
+    Config, ExternalAppConfig, LoggingConfig, PhoneHomeConfig, ServerConfig, TlsConfig,
+};
 use phonehome::models::PhoneHomeData;
 use phonehome::{health_check, AppState};
 use serde_json::{json, Value};
@@ -730,10 +732,12 @@ mod web_tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
-        
+
         assert!(body_str.contains("PhoneHome Server"));
         assert!(body_str.contains("Service Status"));
         assert!(body_str.contains("/health"));
@@ -745,15 +749,22 @@ mod web_tests {
         let app = create_test_app();
 
         let response = app
-            .oneshot(Request::builder().uri("/nonexistent").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/nonexistent")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
-        
+
         assert!(body_str.contains("404"));
         assert!(body_str.contains("Page Not Found"));
         assert!(body_str.contains("Available endpoints"));
@@ -770,16 +781,18 @@ mod web_tests {
                     .uri("/phone-home/wrong-token")
                     .header("content-type", "application/json")
                     .body(Body::from(r#"{"instance_id": "test"}"#))
-                    .unwrap()
+                    .unwrap(),
             )
             .await
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-        
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
-        
+
         assert!(body_str.contains("401"));
         assert!(body_str.contains("Unauthorized"));
         assert!(body_str.contains("Security Notice"));
@@ -797,17 +810,19 @@ mod web_tests {
                     .uri("/phone-home/test-token-123")
                     .header("content-type", "application/json")
                     .body(Body::from(r#"{"malformed json"#))
-                    .unwrap()
+                    .unwrap(),
             )
             .await
             .unwrap();
 
         // Axum's JSON extractor handles malformed JSON and returns 400 with plain text
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
-        
+
         // This will be Axum's default JSON parsing error message
         assert!(body_str.contains("Failed to parse") || body_str.contains("EOF while parsing"));
     }
@@ -824,7 +839,7 @@ mod web_tests {
                     .uri("/phone-home/test-token-123")
                     .header("content-type", "application/json")
                     .body(Body::from(r#"{}"#))
-                    .unwrap()
+                    .unwrap(),
             )
             .await
             .unwrap();
@@ -846,7 +861,7 @@ mod logging_tests {
     async fn test_logging_configuration_validation() {
         let temp_dir = TempDir::new().unwrap();
         let log_file = temp_dir.path().join("test.log");
-        
+
         let logging_config = LoggingConfig {
             log_file,
             log_level: "info".to_string(),
@@ -867,11 +882,17 @@ mod logging_tests {
     #[tokio::test]
     async fn test_default_certificate_paths() {
         let config = Config::default();
-        
+
         // Test that default certificate paths use /var/lib/phonehome
         if let Some(tls_config) = &config.tls {
-            assert_eq!(tls_config.cert_path, PathBuf::from("/var/lib/phonehome/cert.pem"));
-            assert_eq!(tls_config.key_path, PathBuf::from("/var/lib/phonehome/key.pem"));
+            assert_eq!(
+                tls_config.cert_path,
+                PathBuf::from("/var/lib/phonehome/cert.pem")
+            );
+            assert_eq!(
+                tls_config.key_path,
+                PathBuf::from("/var/lib/phonehome/key.pem")
+            );
         } else {
             panic!("TLS config should be Some in default configuration");
         }
@@ -880,16 +901,23 @@ mod logging_tests {
     #[tokio::test]
     async fn test_logging_levels_validation() {
         let mut config = create_test_config();
-        
+
         // Test valid log levels
         let valid_levels = ["trace", "debug", "info", "warn", "error"];
         for level in valid_levels {
             config.logging.log_level = level.to_string();
-            assert!(config.validate().is_ok(), "Log level '{}' should be valid", level);
+            assert!(
+                config.validate().is_ok(),
+                "Log level '{}' should be valid",
+                level
+            );
         }
-        
+
         // Test invalid log level
         config.logging.log_level = "invalid".to_string();
-        assert!(config.validate().is_err(), "Invalid log level should fail validation");
+        assert!(
+            config.validate().is_err(),
+            "Invalid log level should fail validation"
+        );
     }
 }

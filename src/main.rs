@@ -45,7 +45,10 @@ async fn main() -> anyhow::Result<()> {
     // Override port if provided via CLI
     let port = cli.port.unwrap_or(config.server.port);
     if cli.port.is_some() {
-        info!("Port overridden via CLI: {} -> {}", config.server.port, port);
+        info!(
+            "Port overridden via CLI: {} -> {}",
+            config.server.port, port
+        );
     }
     let bind_addr = format!("{}:{}", config.server.host, port);
 
@@ -55,7 +58,10 @@ async fn main() -> anyhow::Result<()> {
     // Setup TLS configuration if provided
     if let Some(ref tls_config) = config.tls {
         info!("TLS configuration found - setting up certificates");
-        debug!("TLS config: cert={:?}, key={:?}", tls_config.cert_path, tls_config.key_path);
+        debug!(
+            "TLS config: cert={:?}, key={:?}",
+            tls_config.cert_path, tls_config.key_path
+        );
         if let Err(err) = tls::setup_tls_config(tls_config).await {
             error!("TLS setup failed: {}", err);
             error!("Server cannot start without valid TLS configuration");
@@ -83,7 +89,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/phone-home/:token", post(phone_home_handler))
         .fallback(web::not_found)
         .with_state(state.clone());
-    
+
     info!("Application router configured with routes:");
     info!("  GET  / - Landing page");
     info!("  GET  /health - Health check endpoint");
@@ -95,7 +101,10 @@ async fn main() -> anyhow::Result<()> {
     if let Some(ref tls_config) = state.config.tls {
         info!("Starting HTTPS server on {}", bind_addr);
         info!("Phone home URL: {}", state.config.get_phone_home_url());
-        debug!("Using TLS certificates: cert={:?}, key={:?}", tls_config.cert_path, tls_config.key_path);
+        debug!(
+            "Using TLS certificates: cert={:?}, key={:?}",
+            tls_config.cert_path, tls_config.key_path
+        );
         start_https_server(app, &bind_addr, tls_config).await?;
     } else {
         info!("Starting HTTP server on {}", bind_addr);
@@ -120,15 +129,15 @@ async fn start_https_server(
     debug!("Loading TLS configuration for HTTPS server");
     debug!("Certificate file: {:?}", tls_config.cert_path);
     debug!("Private key file: {:?}", tls_config.key_path);
-    
+
     let rustls_config =
         RustlsConfig::from_pem_file(&tls_config.cert_path, &tls_config.key_path).await?;
     info!("TLS configuration loaded successfully for HTTPS server");
-    
+
     debug!("Parsing bind address: {}", bind_addr);
     let socket_addr = bind_addr.parse()?;
     debug!("Bind address parsed successfully: {:?}", socket_addr);
-    
+
     info!("HTTPS server listening successfully, ready to accept connections");
     axum_server::bind_rustls(socket_addr, rustls_config)
         .serve(app.into_make_service())
@@ -158,14 +167,14 @@ async fn setup_logging(config: &Config, debug_override: bool) -> anyhow::Result<
     };
 
     // Create a temporary console logger for initial setup messages
-    let temp_subscriber = tracing_subscriber::fmt()
-        .with_max_level(log_level)
-        .finish();
+    let temp_subscriber = tracing_subscriber::fmt().with_max_level(log_level).finish();
     let _guard = tracing::subscriber::set_default(temp_subscriber);
-    
+
     eprintln!("Setting up logging with level: {:?}", log_level);
-    eprintln!("Logging configuration: enable_console={}, enable_file={}, log_file={:?}", 
-              config.logging.enable_console, config.logging.enable_file, config.logging.log_file);
+    eprintln!(
+        "Logging configuration: enable_console={}, enable_file={}, log_file={:?}",
+        config.logging.enable_console, config.logging.enable_file, config.logging.log_file
+    );
 
     let mut layers = Vec::new();
 
@@ -177,8 +186,10 @@ async fn setup_logging(config: &Config, debug_override: bool) -> anyhow::Result<
             .with_file(true)
             .with_line_number(true)
             .with_ansi(true)
-            .with_filter(tracing_subscriber::filter::LevelFilter::from_level(log_level));
-        
+            .with_filter(tracing_subscriber::filter::LevelFilter::from_level(
+                log_level,
+            ));
+
         layers.push(console_layer.boxed());
         eprintln!("Console logging enabled");
     } else {
@@ -189,23 +200,31 @@ async fn setup_logging(config: &Config, debug_override: bool) -> anyhow::Result<
     if config.logging.enable_file {
         // Ensure log directory exists
         if let Some(log_dir) = config.logging.log_file.parent() {
-            tokio::fs::create_dir_all(log_dir).await
-                .map_err(|e| anyhow::anyhow!("Failed to create log directory {:?}: {}", log_dir, e))?;
+            tokio::fs::create_dir_all(log_dir).await.map_err(|e| {
+                anyhow::anyhow!("Failed to create log directory {:?}: {}", log_dir, e)
+            })?;
             eprintln!("Log directory ensured: {:?}", log_dir);
         }
 
         // Setup rolling file appender
-        let file_name = config.logging.log_file
+        let file_name = config
+            .logging
+            .log_file
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("phonehome.log");
-        
-        let log_dir = config.logging.log_file
+
+        let log_dir = config
+            .logging
+            .log_file
             .parent()
             .unwrap_or_else(|| std::path::Path::new("/var/log/phonehome"));
 
-        eprintln!("Setting up file logging: directory={:?}, filename={}", log_dir, file_name);
-        
+        eprintln!(
+            "Setting up file logging: directory={:?}, filename={}",
+            log_dir, file_name
+        );
+
         // Use daily rotation to work well with logrotate
         let file_appender = RollingFileAppender::builder()
             .rotation(tracing_appender::rolling::Rotation::DAILY)
@@ -220,7 +239,9 @@ async fn setup_logging(config: &Config, debug_override: bool) -> anyhow::Result<
             .with_file(true)
             .with_line_number(true)
             .with_ansi(false) // No ANSI colors in log files
-            .with_filter(tracing_subscriber::filter::LevelFilter::from_level(log_level));
+            .with_filter(tracing_subscriber::filter::LevelFilter::from_level(
+                log_level,
+            ));
 
         layers.push(file_layer.boxed());
         eprintln!("File logging enabled: {:?}", config.logging.log_file);
@@ -231,17 +252,15 @@ async fn setup_logging(config: &Config, debug_override: bool) -> anyhow::Result<
 
     // Drop the temporary guard to allow new subscriber
     drop(_guard);
-    
+
     // Initialize the subscriber with all layers
-    tracing_subscriber::registry()
-        .with(layers)
-        .init();
+    tracing_subscriber::registry().with(layers).init();
 
     info!("Logging system initialized successfully");
     info!("Log level: {:?}", log_level);
     info!("Console logging: {}", config.logging.enable_console);
     info!("File logging: {}", config.logging.enable_file);
-    
+
     if config.logging.enable_file {
         info!("Log file: {:?}", config.logging.log_file);
     }
