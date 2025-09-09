@@ -14,7 +14,7 @@ use phonehome::{config::Config, handlers::phone_home_handler, health_check, tls,
 #[command(about = "A secure HTTPS server for Cloud Init phone home requests")]
 struct Cli {
     /// Path to configuration file
-    #[arg(short, long, default_value = "config.toml")]
+    #[arg(short, long, default_value = "/etc/phonehome/config.toml")]
     config: PathBuf,
 
     /// Port to listen on

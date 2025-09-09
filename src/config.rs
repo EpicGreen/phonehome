@@ -45,13 +45,13 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             server: ServerConfig {
-                host: "0.0.0.0".to_string(),
+                host: "127.0.0.1".to_string(),
                 port: 8443,
                 token: "your-secret-token-here".to_string(),
             },
             tls: Some(TlsConfig {
-                cert_path: PathBuf::from("cert.pem"),
-                key_path: PathBuf::from("key.pem"),
+                cert_path: PathBuf::from("/etc/phonehome/cert.pem"),
+                key_path: PathBuf::from("/etc/phonehome/key.pem"),
             }),
             external_app: ExternalAppConfig {
                 command: "/usr/local/bin/process-phone-home".to_string(),

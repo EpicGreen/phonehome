@@ -16,11 +16,11 @@ token = "your-secret-token-here-change-me-123456"
 [tls]
 # Path to the TLS certificate file
 # If the file doesn't exist, a self-signed certificate will be generated automatically
-cert_path = "cert.pem"
+cert_path = "/etc/phonehome/cert.pem"
 
 # Path to the TLS private key file
 # If the file doesn't exist, a private key will be generated automatically
-key_path = "key.pem"
+key_path = "/etc/phonehome/key.pem"
 
 [external_app]
 # Command to execute when phone home data is received
