@@ -11,6 +11,7 @@ BuildRequires:  rust >= 1.70
 BuildRequires:  cargo
 BuildRequires:  gcc
 BuildRequires:  openssl-devel
+BuildRequires:  systemd
 
 Requires:       openssl
 Requires(pre):  shadow-utils
@@ -124,7 +125,7 @@ fi
 %doc %{_docdir}/%{name}/examples/database_logger.sh
 %doc %{_docdir}/%{name}/examples/webhook_notifier.sh
 %{_bindir}/%{name}
-/usr/lib/systemd/system/%{name}.service
+%{_unitdir}/%{name}.service
 %config(noreplace) %{_sysconfdir}/%{name}/config.toml
 %{_datadir}/bash-completion/completions/%{name}
 %dir %attr(750,phonehome,phonehome) %{_localstatedir}/lib/%{name}
