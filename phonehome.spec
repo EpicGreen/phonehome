@@ -1,5 +1,5 @@
 Name:           phonehome
-Version:        0.1.2
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        Secure HTTPS server for Cloud Init phone home requests
 
@@ -63,6 +63,9 @@ install -d %{buildroot}%{_docdir}/%{name}/examples                  # /usr/share
 # Install main binary to /usr/bin
 install -m 0755 target/release/%{name} %{buildroot}%{_bindir}/%{name}
 
+# Install configuration file to /etc/phonehome
+install -m 0640 etc/phonehome/config.toml %{buildroot}%{_sysconfdir}/phonehome/config.toml
+
 # Install systemd service file to /usr/lib/systemd/system
 install -m 0644 usr/lib/systemd/system/%{name}.service %{buildroot}%{_unitdir}/%{name}.service
 
@@ -121,7 +124,7 @@ fi
 %doc %{_docdir}/%{name}/examples/database_logger.sh
 %doc %{_docdir}/%{name}/examples/webhook_notifier.sh
 %{_bindir}/%{name}
-%{_unitdir}/%{name}.service
+/usr/lib/systemd/system/%{name}.service
 %config(noreplace) %{_sysconfdir}/%{name}/config.toml
 %{_datadir}/bash-completion/completions/%{name}
 %dir %attr(750,phonehome,phonehome) %{_localstatedir}/lib/%{name}
