@@ -47,7 +47,7 @@ jobs:
           gh api repos/${{ github.repository }}/dispatches \
             --method POST \
             --field event_type='release-created' \
-            --field client_payload='{"tag":"${{ steps.extract-tag.outputs.tag }}","version":"${{ steps.extract-tag.outputs.version }}"}'
+            --raw-field client_payload="{\"tag\":\"${{ steps.extract-tag.outputs.tag }}\",\"version\":\"${{ steps.extract-tag.outputs.version }}\"}"
 
           echo "CI/CD pipeline triggered successfully"
         env:

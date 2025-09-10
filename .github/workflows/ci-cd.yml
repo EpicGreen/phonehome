@@ -131,6 +131,9 @@ jobs:
           VERSION="${{ needs.build-and-test.outputs.version }}"
           TARBALL_NAME="${{ env.PACKAGE_NAME }}-${VERSION}.tar.gz"
           
+          # Create tarball in parent directory to avoid "file changed as we read it" error
+          cd ..
+          
           # Create a clean source archive excluding git and build artifacts
           tar --create --gzip --file="$TARBALL_NAME" \
             --exclude='.git*' \
@@ -138,8 +141,12 @@ jobs:
             --exclude='*.tar.gz' \
             --exclude='*.rpm' \
             --exclude='*.deb' \
-            --transform="s,^,${{ env.PACKAGE_NAME }}-${VERSION}/," \
-            .
+            --transform="s,^${{ env.PACKAGE_NAME }}/,${{ env.PACKAGE_NAME }}-${VERSION}/," \
+            ${{ env.PACKAGE_NAME }}
+          
+          # Move tarball back to workspace
+          mv "$TARBALL_NAME" ${{ env.PACKAGE_NAME }}/
+          cd ${{ env.PACKAGE_NAME }}
           
           echo "tarball-name=$TARBALL_NAME" >> $GITHUB_OUTPUT
           echo "tarball-path=$TARBALL_NAME" >> $GITHUB_OUTPUT
