@@ -75,50 +75,40 @@ pub async fn landing_page() -> Html<&'static str> {
 <body>
     <div class="container">
         <h1>🏠 PhoneHome Server</h1>
-        
+
         <div class="status">
             <strong>✅ Service Status:</strong> Running and ready to accept Cloud Init phone home requests
         </div>
-        
+
         <h2>Service Information</h2>
         <p>This is a secure HTTPS server designed to handle Cloud Init phone home requests. The server processes incoming data, extracts configured fields, and executes external applications with the processed information.</p>
-        
+
         <h2>Available Endpoints</h2>
-        
+
         <div class="endpoint">
             <strong>GET /health</strong><br>
             Health check endpoint for monitoring and load balancers
         </div>
-        
+
         <div class="endpoint">
             <strong>POST /phone-home/{token}</strong><br>
             Cloud Init phone home data submission endpoint<br>
             <em>Requires valid authentication token and JSON payload</em>
         </div>
-        
+
         <h2>Usage</h2>
         <p>To configure Cloud Init to use this phone home server, add the following to your cloud-config:</p>
-        
+
         <pre><code>#cloud-config
 phone_home:
   url: "https://your-server.com:8443/phone-home/your-token"
   post: all
   tries: 10</code></pre>
-        
+
         <div class="warning">
             <strong>⚠️ Security Notice:</strong> This service requires proper authentication tokens. Unauthorized access attempts are logged and monitored.
         </div>
-        
-        <h2>Features</h2>
-        <ul>
-            <li>🔒 HTTPS/TLS encryption with automatic certificate management</li>
-            <li>🔑 Token-based authentication for secure access</li>
-            <li>📊 Comprehensive logging with request correlation</li>
-            <li>⚙️ Configurable data extraction and processing</li>
-            <li>🔄 External application integration</li>
-            <li>📈 Health monitoring and metrics</li>
-        </ul>
-        
+
         <div class="footer">
             <p>PhoneHome Server - Secure Cloud Init Phone Home Handler</p>
         </div>
@@ -201,17 +191,17 @@ pub async fn not_found() -> Response {
         <h1>404</h1>
         <h2>Page Not Found</h2>
         <p>The requested endpoint does not exist on this PhoneHome server.</p>
-        
+
         <div class="endpoints">
             <strong>Available endpoints:</strong><br>
             <code>GET /</code> - Server information<br>
             <code>GET /health</code> - Health check<br>
             <code>POST /phone-home/{token}</code> - Phone home data submission
         </div>
-        
+
         <a href="/" class="btn">🏠 Home</a>
         <a href="/health" class="btn">❤️ Health Check</a>
-        
+
         <p style="margin-top: 2rem; color: #6c757d; font-size: 0.9rem;">
             If you believe this is an error, please check your URL and try again.
         </p>
@@ -296,7 +286,7 @@ pub async fn bad_request() -> Response {
         <h1>400</h1>
         <h2>Bad Request</h2>
         <p>The request could not be processed due to malformed syntax or invalid data.</p>
-        
+
         <div class="requirements">
             <strong>Phone home requests must include:</strong><br>
             • Valid authentication token in URL<br>
@@ -304,10 +294,10 @@ pub async fn bad_request() -> Response {
             • Valid JSON payload in request body<br>
             • POST method to <code>/phone-home/{token}</code>
         </div>
-        
+
         <a href="/" class="btn">🏠 Home</a>
         <a href="/health" class="btn">❤️ Health Check</a>
-        
+
         <p style="margin-top: 2rem; color: #6c757d; font-size: 0.9rem;">
             Please check your request format and try again.
         </p>
@@ -392,18 +382,18 @@ pub async fn unauthorized() -> Response {
         <h1>401</h1>
         <h2>Unauthorized</h2>
         <p>Access denied. The provided authentication token is invalid or missing.</p>
-        
+
         <div class="security-info">
             <strong>🔒 Security Notice:</strong><br>
             This access attempt has been logged. Valid authentication tokens are required for all phone home requests.
         </div>
-        
+
         <p>Valid phone home URLs follow this format:</p>
         <code>POST /phone-home/{valid-token}</code>
-        
+
         <a href="/" class="btn">🏠 Home</a>
         <a href="/health" class="btn">❤️ Health Check</a>
-        
+
         <p style="margin-top: 2rem; color: #6c757d; font-size: 0.9rem;">
             Contact your system administrator if you need access credentials.
         </p>
@@ -415,7 +405,103 @@ pub async fn unauthorized() -> Response {
     (StatusCode::UNAUTHORIZED, html).into_response()
 }
 
-/// Handle 500 Internal Server Error
+pub async fn forbidden() -> Response {
+    warn!("403 Forbidden: Access denied to protected resource");
+
+    let html = Html(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>403 - Forbidden | PhoneHome Server</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 4rem auto;
+            padding: 2rem;
+            text-align: center;
+            background: #f8f9fa;
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 3rem 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #e74c3c;
+            font-size: 4rem;
+            margin: 0;
+        }
+        h2 {
+            color: #2c3e50;
+            margin: 1rem 0;
+        }
+        p {
+            line-height: 1.6;
+            margin: 1rem 0;
+        }
+        .security-info {
+            background: #ffe6e6;
+            border: 1px solid #ff9999;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1.5rem 0;
+        }
+        .btn {
+            display: inline-block;
+            background: #3498db;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 1rem 0.5rem;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #2980b9;
+        }
+        code {
+            background: #f1f3f4;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>403</h1>
+        <h2>Forbidden</h2>
+        <p>You don't have permission to access this resource using this method.</p>
+
+        <div class="security-info">
+            <strong>🚫 Access Denied:</strong><br>
+            The phone home endpoint only accepts POST requests with valid authentication tokens.
+        </div>
+
+        <div>
+            <p>Valid phone home requests must use:</p>
+            <code>POST /phone-home/{valid-token}</code>
+        </div>
+
+        <a href="/" class="btn">🏠 Home</a>
+        <a href="/health" class="btn">❤️ Health Check</a>
+
+        <p style="margin-top: 2rem; color: #6c757d; font-size: 0.9rem;">
+            This access attempt has been logged for security monitoring.
+        </p>
+    </div>
+</body>
+</html>"#,
+    );
+
+    (StatusCode::FORBIDDEN, html).into_response()
+}
+
 pub async fn internal_server_error() -> Response {
     warn!("500 Internal Server Error: Server encountered an error");
 
@@ -482,15 +568,15 @@ pub async fn internal_server_error() -> Response {
         <h1>500</h1>
         <h2>Internal Server Error</h2>
         <p>The server encountered an unexpected error while processing your request.</p>
-        
+
         <div class="error-info">
             <strong>🔧 Technical Information:</strong><br>
             The error has been logged for investigation. Please try again in a few moments.
         </div>
-        
+
         <a href="/" class="btn">🏠 Home</a>
         <a href="/health" class="btn">❤️ Health Check</a>
-        
+
         <p style="margin-top: 2rem; color: #6c757d; font-size: 0.9rem;">
             If the problem persists, please contact the system administrator.
         </p>
@@ -575,17 +661,17 @@ pub async fn method_not_allowed() -> Response {
         <h1>405</h1>
         <h2>Method Not Allowed</h2>
         <p>The HTTP method used is not allowed for this endpoint.</p>
-        
+
         <div class="methods">
             <strong>Allowed methods by endpoint:</strong><br>
             <code>GET /</code> - Server information<br>
             <code>GET /health</code> - Health check<br>
             <code>POST /phone-home/{token}</code> - Phone home data submission
         </div>
-        
+
         <a href="/" class="btn">🏠 Home</a>
         <a href="/health" class="btn">❤️ Health Check</a>
-        
+
         <p style="margin-top: 2rem; color: #6c757d; font-size: 0.9rem;">
             Please use the correct HTTP method for your request.
         </p>

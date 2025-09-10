@@ -1,11 +1,13 @@
 use std::{path::PathBuf, process::exit};
 
 use axum::{
-    routing::{get, post},
+    routing::{get, MethodRouter},
     Router,
 };
+use axum::response::Response;
+use std::net::SocketAddr;
 use clap::Parser;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 use phonehome::{
@@ -59,24 +61,28 @@ async fn main() -> anyhow::Result<()> {
     info!("Server will bind to: {}", bind_addr);
     debug!("Host: {}, Port: {}", config.server.host, port);
 
-    // Setup TLS configuration if provided
-    if let Some(ref tls_config) = config.tls {
-        info!("TLS configuration found - setting up certificates");
-        debug!(
-            "TLS config: cert={:?}, key={:?}",
-            tls_config.cert_path, tls_config.key_path
-        );
-        if let Err(err) = tls::setup_tls_config(tls_config).await {
-            error!("TLS setup failed: {}", err);
-            error!("Server cannot start without valid TLS configuration");
+    // Require TLS configuration
+    let tls_config = match &config.tls {
+        Some(tls_config) => {
+            info!("TLS configuration found - setting up certificates");
+            debug!(
+                "TLS config: cert={:?}, key={:?}",
+                tls_config.cert_path, tls_config.key_path
+            );
+            if let Err(err) = tls::setup_tls_config(tls_config).await {
+                error!("TLS setup failed: {}", err);
+                error!("Server cannot start without valid TLS configuration");
+                exit(1);
+            }
+            info!("TLS setup completed successfully");
+            tls_config.clone()
+        }
+        None => {
+            error!("No TLS configuration found - HTTPS is required");
+            error!("Please provide TLS configuration in config file");
             exit(1);
         }
-        info!("TLS setup completed successfully");
-    } else {
-        warn!("No TLS configuration found - server will run in HTTP mode");
-        warn!("HTTPS is strongly recommended for production use");
-        debug!("Server will accept unencrypted HTTP connections");
-    }
+    };
 
     // Create application state with rate limiter
     debug!("Creating application state");
@@ -94,7 +100,7 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/", get(web::landing_page))
         .route("/health", get(health_check))
-        .route("/phone-home/:token", post(phone_home_handler))
+        .route("/phone-home/:token", MethodRouter::new().get(phone_home_get_handler).post(phone_home_handler))
         .fallback(web::not_found)
         .with_state(state.clone());
 
@@ -105,26 +111,21 @@ async fn main() -> anyhow::Result<()> {
     info!("  Fallback: Custom 404 error page");
     debug!("Router built successfully with shared state");
 
-    // Start server with appropriate protocol
-    if let Some(ref tls_config) = state.config.tls {
-        info!("Starting HTTPS server on {}", bind_addr);
-        info!("Phone home URL: {}", state.config.get_phone_home_url());
-        debug!(
-            "Using TLS certificates: cert={:?}, key={:?}",
-            tls_config.cert_path, tls_config.key_path
-        );
-        start_https_server(app, &bind_addr, tls_config).await?;
-    } else {
-        info!("Starting HTTP server on {}", bind_addr);
-        info!("Phone home URL: {}", state.config.get_phone_home_url());
-        debug!("Server starting in HTTP mode (no TLS)");
-        let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
-        info!("Server listening successfully, ready to accept connections");
-        axum::serve(listener, app).await?;
-    }
+    // Start HTTPS server
+    info!("Starting HTTPS server on {}", bind_addr);
+    info!("Phone home URL: {}", state.config.get_phone_home_url());
+    debug!(
+        "Using TLS certificates: cert={:?}, key={:?}",
+        tls_config.cert_path, tls_config.key_path
+    );
+    start_https_server(app, &bind_addr, &tls_config).await?;
 
     info!("Server shutdown completed");
     Ok(())
+}
+
+async fn phone_home_get_handler() -> Response {
+    web::forbidden().await
 }
 
 async fn start_https_server(
@@ -148,7 +149,7 @@ async fn start_https_server(
 
     info!("HTTPS server listening successfully, ready to accept connections");
     axum_server::bind_rustls(socket_addr, rustls_config)
-        .serve(app.into_make_service())
+        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
         .await?;
 
     debug!("HTTPS server shutdown completed");
@@ -189,10 +190,10 @@ async fn setup_logging(config: &Config, debug_override: bool) -> anyhow::Result<
     // Console logging layer
     if config.logging.enable_console {
         let console_layer = fmt::layer()
-            .with_target(true)
-            .with_thread_ids(true)
-            .with_file(true)
-            .with_line_number(true)
+            .with_target(false)
+            .with_thread_ids(false)
+            .with_file(false)
+            .with_line_number(false)
             .with_ansi(true)
             .with_filter(tracing_subscriber::filter::LevelFilter::from_level(
                 log_level,
@@ -242,10 +243,10 @@ async fn setup_logging(config: &Config, debug_override: bool) -> anyhow::Result<
 
         let file_layer = fmt::layer()
             .with_writer(file_appender)
-            .with_target(true)
-            .with_thread_ids(true)
-            .with_file(true)
-            .with_line_number(true)
+            .with_target(false)
+            .with_thread_ids(false)
+            .with_file(false)
+            .with_line_number(false)
             .with_ansi(false) // No ANSI colors in log files
             .with_filter(tracing_subscriber::filter::LevelFilter::from_level(
                 log_level,
