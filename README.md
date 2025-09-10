@@ -188,6 +188,12 @@ args = ["--format", "pipe"]                    # Command arguments
 timeout_seconds = 30                           # Execution timeout
 working_directory = "/var/lib/phonehome"       # Working directory (optional)
 
+# Security settings
+max_data_length = 4096                         # Maximum data length in bytes
+allow_control_chars = false                    # Allow control characters (default: false)
+sanitize_input = true                          # Sanitize input data (default: true)
+quote_data = false                             # Encapsulate data in quotes (default: false)
+
 [external_app.environment]                     # Environment variables (optional)
 API_KEY = "your-api-key"
 LOG_LEVEL = "info"

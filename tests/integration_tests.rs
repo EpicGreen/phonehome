@@ -10,6 +10,7 @@ use phonehome::config::{
 use phonehome::models::PhoneHomeData;
 use phonehome::{health_check, AppState};
 use serde_json::{json, Value};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
 use tower::ServiceExt;
@@ -19,6 +20,7 @@ pub fn create_test_app() -> Router {
     let config = create_test_config();
     let state = AppState {
         config: Arc::new(config),
+        rate_limiter: phonehome::RateLimiter::new(100, 300),
     };
 
     Router::new()
@@ -26,20 +28,12 @@ pub fn create_test_app() -> Router {
         .route("/health", axum::routing::get(health_check))
         .route(
             "/phone-home/:token",
-            axum::routing::post(
-                |axum::extract::State(state): axum::extract::State<AppState>,
-                 axum::extract::Path(token): axum::extract::Path<String>,
-                 axum::Json(payload): axum::Json<serde_json::Value>| async move {
-                    phonehome::handlers::phone_home_handler(
-                        axum::extract::State(state),
-                        axum::extract::Path(token),
-                        axum::Json(payload),
-                    )
-                    .await
-                },
-            ),
+            axum::routing::post(phonehome::handlers::phone_home_handler),
         )
         .fallback(phonehome::web::not_found)
+        .layer(axum::extract::connect_info::MockConnectInfo(
+            SocketAddr::from(([127, 0, 0, 1], 3000))
+        ))
         .with_state(state)
 }
 
@@ -66,6 +60,10 @@ fn create_test_config() -> Config {
             timeout_seconds: 5,
             working_directory: None,
             environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
         },
         phone_home: PhoneHomeConfig {
             fields_to_extract: vec![
@@ -344,6 +342,10 @@ mod handlers_tests {
             timeout_seconds: 5,
             working_directory: None,
             environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
         };
 
         let result = validate_external_app(&config).await;
@@ -358,6 +360,10 @@ mod handlers_tests {
             timeout_seconds: 5,
             working_directory: None,
             environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
         };
 
         let result = validate_external_app(&config).await;
@@ -372,6 +378,10 @@ mod handlers_tests {
             timeout_seconds: 5,
             working_directory: Some("/tmp".into()),
             environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
         };
 
         let result = validate_external_app(&config).await;
@@ -390,10 +400,50 @@ mod handlers_tests {
             timeout_seconds: 5,
             working_directory: None,
             environment: Some(env_vars),
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
         };
 
         let result = validate_external_app(&config).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_quote_data_functionality() {
+        // Test with quote_data = true
+        let config_with_quotes = ExternalAppConfig {
+            command: "echo".to_string(),
+            args: vec![],
+            timeout_seconds: 5,
+            working_directory: None,
+            environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: true,
+        };
+
+        // Test with quote_data = false
+        let config_without_quotes = ExternalAppConfig {
+            command: "echo".to_string(),
+            args: vec![],
+            timeout_seconds: 5,
+            working_directory: None,
+            environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
+        };
+
+        // Both configurations should be valid
+        let result_with_quotes = validate_external_app(&config_with_quotes).await;
+        assert!(result_with_quotes.is_ok());
+
+        let result_without_quotes = validate_external_app(&config_without_quotes).await;
+        assert!(result_without_quotes.is_ok());
     }
 }
 

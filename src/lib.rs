@@ -10,7 +10,7 @@ pub mod tls;
 pub mod web;
 
 pub use config::Config;
-pub use handlers::phone_home_handler;
+pub use handlers::{phone_home_handler, RateLimiter};
 pub use models::{PhoneHomeData, ProcessedPhoneHomeData};
 
 use axum::{http::StatusCode, response::Json};
@@ -21,6 +21,7 @@ use tracing::{debug, info};
 #[derive(Clone)]
 pub struct AppState {
     pub config: Arc<Config>,
+    pub rate_limiter: RateLimiter,
 }
 
 /// Health check endpoint handler

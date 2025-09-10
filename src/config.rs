@@ -43,6 +43,24 @@ pub struct ExternalAppConfig {
     pub timeout_seconds: u64,
     pub working_directory: Option<PathBuf>,
     pub environment: Option<std::collections::HashMap<String, String>>,
+    
+    // Security settings
+    #[serde(default = "default_max_data_length")]
+    pub max_data_length: usize,
+    #[serde(default)]
+    pub allow_control_chars: bool,
+    #[serde(default = "default_true")]
+    pub sanitize_input: bool,
+    #[serde(default)]
+    pub quote_data: bool,
+}
+
+fn default_max_data_length() -> usize {
+    4096
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -79,6 +97,10 @@ impl Default for Config {
                 timeout_seconds: 30,
                 working_directory: None,
                 environment: None,
+                max_data_length: 4096,
+                allow_control_chars: false,
+                sanitize_input: true,
+                quote_data: false,
             },
             phone_home: PhoneHomeConfig {
                 fields_to_extract: vec![
@@ -227,6 +249,22 @@ impl Config {
 
         if let Some(ref env) = self.external_app.environment {
             debug!("External app environment variables: {:?}", env);
+        }
+
+        // Validate security settings
+        debug!("Validating external app security settings");
+        debug!("Max data length: {} bytes", self.external_app.max_data_length);
+        debug!("Allow control chars: {}", self.external_app.allow_control_chars);
+        debug!("Sanitize input: {}", self.external_app.sanitize_input);
+        debug!("Quote data: {}", self.external_app.quote_data);
+
+        if self.external_app.max_data_length == 0 {
+            error!("Max data length must be greater than 0");
+            anyhow::bail!("Max data length must be greater than 0");
+        }
+
+        if self.external_app.max_data_length > 1_000_000 {
+            warn!("Max data length is very large: {} bytes", self.external_app.max_data_length);
         }
 
         // Validate logging configuration

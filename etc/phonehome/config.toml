@@ -66,6 +66,20 @@ timeout_seconds = 30
 # API_KEY = "your-api-key"
 # LOG_LEVEL = "info"
 
+# Security Settings for External Application
+# Maximum length of data that can be passed to external application (in bytes)
+max_data_length = 4096
+
+# Whether to allow control characters in the data (default: false for security)
+allow_control_chars = false
+
+# Whether to sanitize input data before passing to external application (default: true)
+sanitize_input = true
+
+# Whether to encapsulate the sanitized data argument in quotes (default: false)
+# Set to true if your external application expects quoted arguments
+quote_data = true
+
 [phone_home]
 # List of fields to extract from the Cloud Init phone home data
 # Available fields include:
@@ -106,85 +120,3 @@ include_timestamp = true
 
 # Whether to include the instance_id as a separate field (even if not in fields_to_extract)
 include_instance_id = true
-
-# Example Cloud Init configuration to add to your user-data:
-#
-# #cloud-config
-# phone_home:
-#   url: "https://your-domain.com:8443/phone-home/your-secret-token-here-change-me-123456"
-#   post: all
-#   tries: 10
-#
-# The phone home URL format is:
-# https://{server.host}:{server.port}/phone-home/{server.token}
-
-# Example external application script (/usr/local/bin/process-phone-home):
-#
-# #!/bin/bash
-# # Example script to process phone home data
-# DATA="$1"
-# echo "Received phone home data: $DATA" >> /var/log/phonehome.log
-#
-# # Parse the pipe-separated data
-# IFS='|' read -ra FIELDS <<< "$DATA"
-# TIMESTAMP="${FIELDS[0]}"
-# INSTANCE_ID="${FIELDS[1]}"
-# HOSTNAME="${FIELDS[2]}"
-# PUBLIC_IP="${FIELDS[3]}"
-# LOCAL_IP="${FIELDS[4]}"
-# CLOUD_NAME="${FIELDS[5]}"
-# REGION="${FIELDS[6]}"
-#
-# # Do something with the data (send to monitoring system, update database, etc.)
-# echo "Instance $INSTANCE_ID ($HOSTNAME) is online at $PUBLIC_IP in $CLOUD_NAME/$REGION"
-
-# Certificate Management
-# The server can automatically generate self-signed certificates if the certificate
-# files specified above do not exist. This is useful for testing and development.
-# Self-signed certificates are now stored in /var/lib/phonehome/ by default.
-# For production use, provide your own certificate files or use a certificate
-# authority like Let's Encrypt with certbot:
-#
-# sudo certbot certonly --standalone -d your-domain.com
-# Then update cert_path and key_path to point to the generated certificates.
-
-# Testing and Demo Examples:
-# For development/testing, you can run with different configurations:
-#
-# 1. Production mode (HTTPS with auto-generated certs):
-#    cargo run -- --config /etc/phonehome/config.toml
-#
-# 2. Debug mode with detailed logging:
-#    cargo run -- --config /etc/phonehome/config.toml --debug
-#
-# 3. HTTP mode for local testing (comment out [tls] section and use port 8080):
-#    host = "127.0.0.1"
-#    port = 8080
-#
-# 4. Test commands for local development:
-#    # Landing page: curl http://127.0.0.1:8080/
-#    # Health check: curl http://127.0.0.1:8080/health
-#    # Phone home: curl -X POST http://127.0.0.1:8080/phone-home/your-token \
-#    #   -H "Content-Type: application/json" \
-#    #   -d '{"instance_id": "i-demo123", "hostname": "demo-server"}'
-#    # Test 404: curl http://127.0.0.1:8080/invalid
-#    # Test auth error: curl -X POST http://127.0.0.1:8080/phone-home/wrong-token \
-#    #   -H "Content-Type: application/json" -d '{}'
-
-# Web Interface:
-# The server includes a web interface accessible via browser:
-# - Landing page: https://your-server.com:8443/
-# - Health check: https://your-server.com:8443/health
-# - Custom error pages for 404, 401, 400, 500 errors
-
-# Security Notes:
-# 1. Always use HTTPS in production
-# 2. Use a strong, random token
-# 3. Restrict access to the server using firewall rules
-# 4. Regularly rotate the token
-# 5. Monitor the logs for suspicious activity
-# 6. Ensure the external application is secure and validated
-# 7. Use proper certificate management for production deployments
-# 8. Self-signed certificates should only be used for testing or internal use
-# 9. Certificate and key files are now stored in /var/lib/phonehome/ by default
-# 10. Log files are stored in /var/log/phonehome/ with rotation support

@@ -1,34 +1,85 @@
 use std::process::Stdio;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::collections::HashMap;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, State, ConnectInfo},
     response::{IntoResponse, Json, Response},
     Json as JsonExtractor,
 };
 use serde_json::Value;
 use tokio::process::Command;
 use tokio::time::timeout;
+use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
+use sha2::{Sha256, Digest};
+use std::net::SocketAddr;
 
 use crate::models::PhoneHomeData;
 use crate::web;
 use crate::AppState;
 
+// Rate limiting structure
+#[derive(Clone)]
+pub struct RateLimiter {
+    requests: Arc<RwLock<HashMap<String, Vec<Instant>>>>,
+    max_requests: usize,
+    window_duration: Duration,
+}
+
+impl RateLimiter {
+    pub fn new(max_requests: usize, window_seconds: u64) -> Self {
+        Self {
+            requests: Arc::new(RwLock::new(HashMap::new())),
+            max_requests,
+            window_duration: Duration::from_secs(window_seconds),
+        }
+    }
+    
+    pub async fn check_rate_limit(&self, client_id: &str) -> bool {
+        let mut requests = self.requests.write().await;
+        let now = Instant::now();
+        
+        // Clean old entries
+        let cutoff = now - self.window_duration;
+        requests.entry(client_id.to_string())
+            .or_insert_with(Vec::new)
+            .retain(|&timestamp| timestamp > cutoff);
+            
+        let client_requests = requests.get_mut(client_id).unwrap();
+        
+        if client_requests.len() >= self.max_requests {
+            return false; // Rate limit exceeded
+        }
+        
+        client_requests.push(now);
+        true
+    }
+}
+
 /// Handle phone home requests from Cloud Init
 pub async fn phone_home_handler(
     State(state): State<AppState>,
     Path(token): Path<String>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     JsonExtractor(payload): JsonExtractor<Value>,
 ) -> Response {
     // Generate correlation ID for this request
     let correlation_id = Uuid::new_v4();
+    let client_ip = addr.ip().to_string();
 
     info!(
-        "Received phone home request [{}] with token: {}",
-        correlation_id, token
+        "Received phone home request [{}] from {} with token: {}",
+        correlation_id, client_ip, token
     );
+
+    // Check rate limit
+    if !state.rate_limiter.check_rate_limit(&client_ip).await {
+        warn!("[{}] Rate limit exceeded for IP: {}", correlation_id, client_ip);
+        return web::bad_request().await;
+    }
     debug!(
         "[{}] Phone home payload: {}",
         correlation_id,
@@ -91,6 +142,25 @@ pub async fn phone_home_handler(
         processed_data.extracted_fields.len(),
         processed_data.formatted_data
     );
+
+    // Security logging and monitoring
+    let data_hash = Sha256::digest(processed_data.formatted_data.as_bytes());
+    info!(
+        "[{}] SECURITY: External app execution requested - IP: {}, Data hash: {:x}, Length: {}",
+        correlation_id, 
+        client_ip,
+        data_hash,
+        processed_data.formatted_data.len()
+    );
+
+    // Check for suspicious patterns
+    if processed_data.formatted_data.len() > 1000 {
+        warn!("[{}] SECURITY: Large data payload detected: {} bytes", correlation_id, processed_data.formatted_data.len());
+    }
+
+    if processed_data.formatted_data.contains("../") || processed_data.formatted_data.contains("..\\") {
+        warn!("[{}] SECURITY: Path traversal attempt detected", correlation_id);
+    }
     debug!(
         "[{}] Extracted fields: {:?}",
         correlation_id, processed_data.extracted_fields
@@ -144,6 +214,62 @@ pub async fn phone_home_handler(
     Json(response).into_response()
 }
 
+/// Sanitize and validate data before passing to external application
+fn sanitize_external_app_data(
+    data: &str, 
+    config: &crate::config::ExternalAppConfig,
+    correlation_id: &Uuid
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    // Maximum length check
+    if data.len() > config.max_data_length {
+        let error_msg = format!("Data too long: {} bytes (max: {})", data.len(), config.max_data_length);
+        warn!("[{}] {}", correlation_id, error_msg);
+        return Err(error_msg.into());
+    }
+
+    // Check for null bytes (can terminate strings unexpectedly)
+    if data.contains('\0') {
+        let error_msg = "Data contains null bytes";
+        warn!("[{}] {}", correlation_id, error_msg);
+        return Err(error_msg.into());
+    }
+
+    // Check for control characters that could be problematic
+    if !config.allow_control_chars {
+        let has_dangerous_chars = data.chars().any(|c| {
+            c.is_control() && c != '\t' && c != '\n' && c != '\r'
+        });
+            
+        if has_dangerous_chars {
+            let error_msg = "Data contains dangerous control characters";
+            warn!("[{}] {}", correlation_id, error_msg);
+            return Err(error_msg.into());
+        }
+    }
+
+    // Optional: Sanitize input if configured
+    let sanitized = if config.sanitize_input {
+        data.chars()
+            .filter(|&c| {
+                // Allow alphanumeric, common punctuation, and safe whitespace
+                c.is_ascii_alphanumeric() 
+                    || c.is_ascii_punctuation() 
+                    || c == ' ' || c == '\t' || c == '\n' || c == '\r'
+            })
+            .collect::<String>()
+    } else {
+        data.to_string()
+    };
+
+    // Log if data was modified
+    if sanitized != data {
+        info!("[{}] Data sanitized: {} -> {} chars", correlation_id, data.len(), sanitized.len());
+    }
+
+    debug!("[{}] Sanitized data: '{}'", correlation_id, sanitized);
+    Ok(sanitized)
+}
+
 /// Execute the configured external application with the processed data
 async fn execute_external_app(
     config: &crate::config::ExternalAppConfig,
@@ -154,8 +280,13 @@ async fn execute_external_app(
         "[{}] Executing external application: {}",
         correlation_id, config.command
     );
+    
+    // SECURITY: Sanitize input data
+    let sanitized_data = sanitize_external_app_data(data, config, correlation_id)?;
+    
     debug!("[{}] Command args: {:?}", correlation_id, config.args);
-    debug!("[{}] Data to pass: '{}'", correlation_id, data);
+    debug!("[{}] Original data length: {}", correlation_id, data.len());
+    debug!("[{}] Sanitized data: '{}'", correlation_id, sanitized_data);
     debug!(
         "[{}] Timeout: {} seconds",
         correlation_id, config.timeout_seconds
@@ -168,8 +299,15 @@ async fn execute_external_app(
         cmd.arg(arg);
     }
 
-    // Add the data as the final argument
-    cmd.arg(data);
+    // SECURITY: Use sanitized data with optional quoting
+    // Rust's arg() method handles argument separation safely
+    let data_arg = if config.quote_data {
+        format!("\"{}\"", sanitized_data)
+    } else {
+        sanitized_data.to_string()
+    };
+    debug!("[{}] Quote data enabled: {}", correlation_id, config.quote_data);
+    cmd.arg(&data_arg);
 
     // Set working directory if configured
     if let Some(ref working_dir) = config.working_directory {
@@ -347,6 +485,10 @@ mod tests {
             timeout_seconds: 5,
             working_directory: None,
             environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
         };
 
         let correlation_id = Uuid::new_v4();
@@ -367,6 +509,10 @@ mod tests {
             timeout_seconds: 5,
             working_directory: None,
             environment: Some(env_vars),
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
         };
 
         let correlation_id = Uuid::new_v4();
@@ -384,10 +530,14 @@ mod tests {
             timeout_seconds: 1,
             working_directory: None,
             environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
         };
 
         let correlation_id = Uuid::new_v4();
-        let result = execute_external_app(&config, "test-data", &correlation_id).await;
+        let result = execute_external_app(&config, "ignored", &correlation_id).await;
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("timed out"));
@@ -396,11 +546,15 @@ mod tests {
     #[tokio::test]
     async fn test_execute_external_app_not_found() {
         let config = ExternalAppConfig {
-            command: "non-existent-command-12345".to_string(),
+            command: "nonexistentcommand".to_string(),
             args: vec![],
             timeout_seconds: 5,
             working_directory: None,
             environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
         };
 
         let correlation_id = Uuid::new_v4();
@@ -416,6 +570,10 @@ mod tests {
             timeout_seconds: 5,
             working_directory: None,
             environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
         };
 
         let result = validate_external_app(&config).await;
@@ -430,9 +588,58 @@ mod tests {
             timeout_seconds: 5,
             working_directory: None,
             environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
         };
 
         let result = validate_external_app(&config).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_quote_data_with_execution() {
+        // Test with quote_data = true
+        let config_with_quotes = ExternalAppConfig {
+            command: "echo".to_string(),
+            args: vec!["Data:".to_string()],
+            timeout_seconds: 5,
+            working_directory: None,
+            environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: true,
+        };
+
+        let correlation_id = Uuid::new_v4();
+        let test_data = "test|data|with|pipes";
+        
+        let result = execute_external_app(&config_with_quotes, test_data, &correlation_id).await;
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        // With quotes, the output should contain the quoted data
+        assert!(output.contains("\"test|data|with|pipes\""));
+
+        // Test with quote_data = false
+        let config_without_quotes = ExternalAppConfig {
+            command: "echo".to_string(),
+            args: vec!["Data:".to_string()],
+            timeout_seconds: 5,
+            working_directory: None,
+            environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
+        };
+
+        let result = execute_external_app(&config_without_quotes, test_data, &correlation_id).await;
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        // Without quotes, the output should contain the unquoted data
+        assert!(output.contains("test|data|with|pipes"));
+        assert!(!output.contains("\"test|data|with|pipes\""));
     }
 }
