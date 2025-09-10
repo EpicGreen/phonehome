@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*.*.*'
+      - '*.*.*'
 
 permissions:
   contents: write
@@ -12,14 +13,9 @@ env:
   PACKAGE_NAME: phonehome
 
 jobs:
-  create-release:
-    name: Create Release
+  create-release-and-trigger:
+    name: Create Release and Trigger CI/CD
     runs-on: ubuntu-latest
-    outputs:
-      release-id: ${{ steps.create-release.outputs.id }}
-      tag-name: ${{ steps.extract-tag.outputs.tag }}
-      version: ${{ steps.extract-tag.outputs.version }}
-      upload-url: ${{ steps.create-release.outputs.upload_url }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -42,5 +38,17 @@ jobs:
             --notes "Release ${{ steps.extract-tag.outputs.version }}" \
             --draft=false \
             --prerelease=false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger CI/CD Pipeline
+        run: |
+          # Trigger the existing CI/CD workflow by creating a repository dispatch event
+          gh api repos/${{ github.repository }}/dispatches \
+            --method POST \
+            --field event_type='release-created' \
+            --field client_payload='{"tag":"${{ steps.extract-tag.outputs.tag }}","version":"${{ steps.extract-tag.outputs.version }}"}'
+
+          echo "CI/CD pipeline triggered successfully"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
