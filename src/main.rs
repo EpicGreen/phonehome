@@ -1,12 +1,12 @@
 use std::{path::PathBuf, process::exit};
 
+use axum::response::Response;
 use axum::{
     routing::{get, MethodRouter},
     Router,
 };
-use axum::response::Response;
-use std::net::SocketAddr;
 use clap::Parser;
+use std::net::SocketAddr;
 use tracing::{debug, error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
@@ -100,7 +100,12 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/", get(web::landing_page))
         .route("/health", get(health_check))
-        .route("/phone-home/:token", MethodRouter::new().get(phone_home_get_handler).post(phone_home_handler))
+        .route(
+            "/phone-home/:token",
+            MethodRouter::new()
+                .get(phone_home_get_handler)
+                .post(phone_home_handler),
+        )
         .fallback(web::not_found)
         .with_state(state.clone());
 
