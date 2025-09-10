@@ -1,0 +1,46 @@
+name: Auto Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+env:
+  PACKAGE_NAME: phonehome
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      release-id: ${{ steps.create-release.outputs.id }}
+      tag-name: ${{ steps.extract-tag.outputs.tag }}
+      version: ${{ steps.extract-tag.outputs.version }}
+      upload-url: ${{ steps.create-release.outputs.upload_url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract tag name and version
+        id: extract-tag
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG_NAME#v}  # Remove 'v' prefix if present
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Tag: $TAG_NAME"
+          echo "Version: $VERSION"
+
+      - name: Create Release
+        id: create-release
+        run: |
+          gh release create "${{ steps.extract-tag.outputs.tag }}" \
+            --title "${{ steps.extract-tag.outputs.version }}" \
+            --notes "Release ${{ steps.extract-tag.outputs.version }}" \
+            --draft=false \
+            --prerelease=false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
