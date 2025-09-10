@@ -43,7 +43,7 @@ pub struct ExternalAppConfig {
     pub timeout_seconds: u64,
     pub working_directory: Option<PathBuf>,
     pub environment: Option<std::collections::HashMap<String, String>>,
-    
+
     // Security settings
     #[serde(default = "default_max_data_length")]
     pub max_data_length: usize,
@@ -253,8 +253,14 @@ impl Config {
 
         // Validate security settings
         debug!("Validating external app security settings");
-        debug!("Max data length: {} bytes", self.external_app.max_data_length);
-        debug!("Allow control chars: {}", self.external_app.allow_control_chars);
+        debug!(
+            "Max data length: {} bytes",
+            self.external_app.max_data_length
+        );
+        debug!(
+            "Allow control chars: {}",
+            self.external_app.allow_control_chars
+        );
         debug!("Sanitize input: {}", self.external_app.sanitize_input);
         debug!("Quote data: {}", self.external_app.quote_data);
 
@@ -264,7 +270,10 @@ impl Config {
         }
 
         if self.external_app.max_data_length > 1_000_000 {
-            warn!("Max data length is very large: {} bytes", self.external_app.max_data_length);
+            warn!(
+                "Max data length is very large: {} bytes",
+                self.external_app.max_data_length
+            );
         }
 
         // Validate logging configuration

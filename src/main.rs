@@ -8,7 +8,11 @@ use clap::Parser;
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
-use phonehome::{config::Config, handlers::{phone_home_handler, RateLimiter}, health_check, tls, web, AppState};
+use phonehome::{
+    config::Config,
+    handlers::{phone_home_handler, RateLimiter},
+    health_check, tls, web, AppState,
+};
 
 #[derive(Debug, Parser)]
 #[command(name = "phonehome")]
@@ -78,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
     debug!("Creating application state");
     let rate_limiter = RateLimiter::new(100, 300); // 100 requests per 5 minutes
     info!("Rate limiter initialized: 100 requests per 300 seconds");
-    
+
     let state = AppState {
         config: std::sync::Arc::new(config),
         rate_limiter,

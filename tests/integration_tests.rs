@@ -32,7 +32,7 @@ pub fn create_test_app() -> Router {
         )
         .fallback(phonehome::web::not_found)
         .layer(axum::extract::connect_info::MockConnectInfo(
-            SocketAddr::from(([127, 0, 0, 1], 3000))
+            SocketAddr::from(([127, 0, 0, 1], 3000)),
         ))
         .with_state(state)
 }
