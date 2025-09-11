@@ -323,11 +323,10 @@ async fn parse_form_data(
     use std::str;
 
     // Convert bytes to string
-    let body_str = str::from_utf8(raw_body)
-        .map_err(|e| {
-            warn!("[{}] Invalid UTF-8 in request body: {}", correlation_id, e);
-            e
-        })?;
+    let body_str = str::from_utf8(raw_body).map_err(|e| {
+        warn!("[{}] Invalid UTF-8 in request body: {}", correlation_id, e);
+        e
+    })?;
 
     // Parse URL-encoded form data manually
     let mut form_data = PhoneHomeFormData {
@@ -343,11 +342,13 @@ async fn parse_form_data(
     for pair in body_str.split('&') {
         if let Some((key, value)) = pair.split_once('=') {
             // URL decode the value
-            let decoded_value = urlencoding::decode(value)
-                .map_err(|e| {
-                    warn!("[{}] Failed to URL decode value for key '{}': {}", correlation_id, key, e);
-                    e
-                })?;
+            let decoded_value = urlencoding::decode(value).map_err(|e| {
+                warn!(
+                    "[{}] Failed to URL decode value for key '{}': {}",
+                    correlation_id, key, e
+                );
+                e
+            })?;
 
             match key {
                 "pub_key_rsa" => form_data.pub_key_rsa = Some(decoded_value.into_owned()),
