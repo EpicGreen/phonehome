@@ -292,6 +292,57 @@ mod models_tests {
 }
 
 #[cfg(test)]
+mod debug_logging_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_phone_home_debug_logging_with_data() {
+        let app = create_test_app();
+
+        let form_data = "instance_id=i-1234567890abcdef0&hostname=test-host&fqdn=test-host.example.com&pub_key_rsa=ssh-rsa+AAAAB3NzaC1yc2EAAAADAQABAAABgQC7...&pub_key_ecdsa=ecdsa-sha2-nistp256+AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTY...&pub_key_ed25519=ssh-ed25519+AAAAC3NzaC1lZDI1NTE5AAAAI...";
+
+        let request = Request::builder()
+            .uri("/phone-home/test-token-123")
+            .method("POST")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(form_data))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["status"], "success");
+    }
+
+    #[tokio::test]
+    async fn test_phone_home_debug_logging_empty_data() {
+        let app = create_test_app();
+
+        let form_data = "";
+
+        let request = Request::builder()
+            .uri("/phone-home/test-token-123")
+            .method("POST")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(form_data))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["status"], "success");
+    }
+}
+
+#[cfg(test)]
 mod tls_tests {
     use phonehome::tls::generate_self_signed_cert;
     use tempfile::TempDir;
