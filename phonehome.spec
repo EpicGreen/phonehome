@@ -117,7 +117,7 @@ if grep -q "your-secret-token-here-change-me-123456" %{_sysconfdir}/phonehome/co
 fi
 
 %systemd_post %{name}.service
-
+update docs
 %preun
 %systemd_preun %{name}.service
 
@@ -137,7 +137,7 @@ fi
 %dir %attr(750,root,phonehome) %{_sysconfdir}/%{name}
 
 %changelog
-* Wed Sep 3 2025 Ante de Baas <packages@debaas.net> - 0.1.1-1
+* Thu Sep 11 2025 Ante de Baas <packages@debaas.net> - 0.1.6-1
 - Initial package
 - HTTPS server for Cloud Init phone home requests
 - TOML configuration with token-based authentication
