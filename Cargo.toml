@@ -1,6 +1,6 @@
 [package]
 name = "phonehome"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2021"
 default-run = "phonehome"
 
@@ -25,6 +25,7 @@ uuid = { version = "1.0", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 tokio-stream = { version = "0.1", features = ["fs"] }
 sha2 = "0.10"
+urlencoding = "2.1"
 
 [dev-dependencies]
 tempfile = "3.8"

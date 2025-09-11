@@ -1,6 +1,6 @@
 Name:           phonehome
-Version:        0.1.8
-Release:        2%{?dist}
+Version:        0.1.9
+Release:        1%{?dist}
 Summary:        Secure HTTPS server for Cloud Init phone home requests
 
 License:        AGPL-3.0-or-later

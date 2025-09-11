@@ -4,7 +4,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::{
-    extract::{ConnectInfo, Form, Path, State},
+    body::Bytes,
+    extract::{ConnectInfo, Path, State},
     response::{IntoResponse, Json, Response},
 };
 use serde::Deserialize;
@@ -82,7 +83,7 @@ pub async fn phone_home_handler(
     State(state): State<AppState>,
     Path(token): Path<String>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Form(form_data): Form<PhoneHomeFormData>,
+    raw_body: Bytes,
 ) -> Response {
     // Generate correlation ID for this request
     let correlation_id = Uuid::new_v4();
@@ -93,6 +94,13 @@ pub async fn phone_home_handler(
         correlation_id, client_ip, token
     );
 
+    // Log the raw request body for debugging
+    debug!(
+        "[{}] Raw request body: {}",
+        correlation_id,
+        String::from_utf8_lossy(&raw_body)
+    );
+
     // Check rate limit
     if !state.rate_limiter.check_rate_limit(&client_ip).await {
         warn!(
@@ -101,6 +109,15 @@ pub async fn phone_home_handler(
         );
         return web::bad_request().await;
     }
+
+    // Parse the raw body as form data
+    let form_data = match parse_form_data(&raw_body, &correlation_id).await {
+        Ok(data) => data,
+        Err(_) => {
+            warn!("[{}] Failed to parse form data", correlation_id);
+            return web::bad_request().await;
+        }
+    };
 
     // Log incoming POST form data for debugging
     debug!(
@@ -296,6 +313,57 @@ pub async fn phone_home_handler(
     );
 
     Json(response).into_response()
+}
+
+/// Parse form data from raw bytes
+async fn parse_form_data(
+    raw_body: &[u8],
+    correlation_id: &Uuid,
+) -> Result<PhoneHomeFormData, Box<dyn std::error::Error + Send + Sync>> {
+    use std::str;
+
+    // Convert bytes to string
+    let body_str = str::from_utf8(raw_body)
+        .map_err(|e| {
+            warn!("[{}] Invalid UTF-8 in request body: {}", correlation_id, e);
+            e
+        })?;
+
+    // Parse URL-encoded form data manually
+    let mut form_data = PhoneHomeFormData {
+        pub_key_rsa: None,
+        pub_key_ecdsa: None,
+        pub_key_ed25519: None,
+        instance_id: None,
+        hostname: None,
+        fqdn: None,
+    };
+
+    // Split by & to get key-value pairs
+    for pair in body_str.split('&') {
+        if let Some((key, value)) = pair.split_once('=') {
+            // URL decode the value
+            let decoded_value = urlencoding::decode(value)
+                .map_err(|e| {
+                    warn!("[{}] Failed to URL decode value for key '{}': {}", correlation_id, key, e);
+                    e
+                })?;
+
+            match key {
+                "pub_key_rsa" => form_data.pub_key_rsa = Some(decoded_value.into_owned()),
+                "pub_key_ecdsa" => form_data.pub_key_ecdsa = Some(decoded_value.into_owned()),
+                "pub_key_ed25519" => form_data.pub_key_ed25519 = Some(decoded_value.into_owned()),
+                "instance_id" => form_data.instance_id = Some(decoded_value.into_owned()),
+                "hostname" => form_data.hostname = Some(decoded_value.into_owned()),
+                "fqdn" => form_data.fqdn = Some(decoded_value.into_owned()),
+                _ => {
+                    debug!("[{}] Unknown form field: {}", correlation_id, key);
+                }
+            }
+        }
+    }
+
+    Ok(form_data)
 }
 
 /// Sanitize and validate data before passing to external application
