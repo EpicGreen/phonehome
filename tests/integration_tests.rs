@@ -222,7 +222,10 @@ mod models_tests {
         };
 
         let processed = data.process(&config);
-        assert_eq!(processed.formatted_data, "test-instance|test-instance.example.com");
+        assert_eq!(
+            processed.formatted_data,
+            "test-instance|test-instance.example.com"
+        );
         assert_eq!(processed.extracted_fields.len(), 2);
         assert_eq!(
             processed.instance_id,
@@ -255,9 +258,18 @@ mod models_tests {
         assert_eq!(data.instance_id, Some("i-1234567890abcdef0".to_string()));
         assert_eq!(data.hostname, Some("test-instance".to_string()));
         assert_eq!(data.fqdn, Some("test-instance.example.com".to_string()));
-        assert_eq!(data.pub_key_rsa, Some("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7... test-key-1".to_string()));
-        assert_eq!(data.pub_key_ecdsa, Some("ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTY... test-key-2".to_string()));
-        assert_eq!(data.pub_key_ed25519, Some("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... test-key-3".to_string()));
+        assert_eq!(
+            data.pub_key_rsa,
+            Some("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7... test-key-1".to_string())
+        );
+        assert_eq!(
+            data.pub_key_ecdsa,
+            Some("ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTY... test-key-2".to_string())
+        );
+        assert_eq!(
+            data.pub_key_ed25519,
+            Some("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... test-key-3".to_string())
+        );
     }
 
     #[test]
