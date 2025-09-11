@@ -913,11 +913,8 @@ mod web_tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
 
-        // This will be Axum's default form content type error message
-        assert!(
-            body_str.contains("Form requests must have")
-                || body_str.contains("Content-Type: application/x-www-form-urlencoded")
-        );
+        // This will be Axum's default unsupported media type error message
+        assert!(body_str.contains("Unsupported Media Type"));
     }
 
     #[tokio::test]

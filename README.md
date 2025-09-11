@@ -429,23 +429,34 @@ This project includes automated code quality checks to ensure consistent code st
 A pre-commit hook is automatically installed that runs:
 
 1. **cargo clippy** - Linting and static analysis
-2. **cargo fmt** - Code formatting
+2. **cargo test** - Run all tests
+3. **cargo fmt** - Code formatting
 
 The hook will:
 - Run clippy with warnings treated as errors (`-D warnings`)
-- If clippy passes, automatically run `cargo fmt` to format code
+- If clippy passes, run all tests (`cargo test`)
+- If tests pass, automatically run `cargo fmt` to format code
 - Add any formatted files back to the commit
-- Allow the commit to proceed only if both checks pass
+- Allow the commit to proceed only if all checks pass
 
 The pre-commit hook is located at `.git/hooks/pre-commit` and is automatically executable.
+
+**Note:** The pre-commit process will take longer now since it runs the full test suite, but this ensures that only working, tested code is committed.
 
 #### Manual Code Quality Checks
 
 You can also run code quality checks manually:
 
 ```bash
+# Run all quality checks manually (same as pre-commit hook):
 cargo clippy --all-targets --all-features -- -D warnings
+cargo test
 cargo fmt --all
+
+# Or run individual commands:
+cargo clippy --all-targets --all-features -- -D warnings  # Linting
+cargo test                                                 # Tests
+cargo fmt --all                                           # Format code
 
 # Check formatting without changing files
 cargo fmt --all -- --check
@@ -454,6 +465,7 @@ cargo fmt --all -- --check
 #### Code Quality Requirements
 
 - All clippy warnings must be resolved before committing
+- All tests must pass before committing
 - Code must be formatted according to rustfmt standards
 - New code should include appropriate tests
 - External dependencies should be justified and documented
