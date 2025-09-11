@@ -1,6 +1,6 @@
 Name:           phonehome
 Version:        0.1.8
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Secure HTTPS server for Cloud Init phone home requests
 
 License:        AGPL-3.0-or-later
@@ -104,15 +104,13 @@ chown root:phonehome %{_sysconfdir}/phonehome
 chmod 750 %{_localstatedir}/lib/phonehome
 chmod 750 %{_localstatedir}/log/phonehome
 chmod 750 %{_sysconfdir}/phonehome
-
 # Generate a secure random token if using default
 if grep -q "your-secret-token-here-change-me-123456" %{_sysconfdir}/phonehome/config.toml; then
     RANDOM_TOKEN=$(openssl rand -hex 32)
     sed -i "s/your-secret-token-here-change-me-123456/$RANDOM_TOKEN/" %{_sysconfdir}/phonehome/config.toml
 fi
-
 %systemd_post %{name}.service
-update docs
+
 %preun
 %systemd_preun %{name}.service
 
