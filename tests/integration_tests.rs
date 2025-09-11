@@ -273,26 +273,21 @@ mod models_tests {
     }
 
     #[test]
-    fn test_phone_home_data_with_additional_fields() {
-        let mut json_data = create_test_phone_home_data();
-        json_data["custom_field"] = json!("custom_value");
-        json_data["numeric_field"] = json!(12345);
-        json_data["boolean_field"] = json!(true);
+    fn test_phone_home_data_unknown_fields() {
+        let data = PhoneHomeData {
+            instance_id: Some("i-1234567890abcdef0".to_string()),
+            hostname: Some("test-host".to_string()),
+            fqdn: Some("test-host.example.com".to_string()),
+            pub_key_rsa: Some("ssh-rsa AAAAB3... test-key-1".to_string()),
+            pub_key_ecdsa: Some("ecdsa-sha2-nistp256 AAAAE2V... test-key-2".to_string()),
+            pub_key_ed25519: Some("ssh-ed25519 AAAAC3... test-key-3".to_string()),
+        };
 
-        let data: PhoneHomeData = serde_json::from_value(json_data).unwrap();
-
-        assert_eq!(
-            data.extract_field_value("custom_field"),
-            Some("custom_value".to_string())
-        );
-        assert_eq!(
-            data.extract_field_value("numeric_field"),
-            Some("12345".to_string())
-        );
-        assert_eq!(
-            data.extract_field_value("boolean_field"),
-            Some("true".to_string())
-        );
+        // Unknown fields should return None
+        assert_eq!(data.extract_field_value("custom_field"), None);
+        assert_eq!(data.extract_field_value("numeric_field"), None);
+        assert_eq!(data.extract_field_value("boolean_field"), None);
+        assert_eq!(data.extract_field_value("nonexistent"), None);
     }
 }
 

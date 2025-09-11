@@ -101,6 +101,18 @@ pub async fn phone_home_handler(
         );
         return web::bad_request().await;
     }
+
+    // Log incoming POST data for debugging
+    debug!(
+        "[{}] Incoming POST data - instance_id: {:?}, hostname: {:?}, fqdn: {:?}, pub_key_rsa: {:?}, pub_key_ecdsa: {:?}, pub_key_ed25519: {:?}",
+        correlation_id,
+        form_data.instance_id,
+        form_data.hostname,
+        form_data.fqdn,
+        form_data.pub_key_rsa.as_ref().map(|k| format!("{}...", &k.chars().take(20).collect::<String>())),
+        form_data.pub_key_ecdsa.as_ref().map(|k| format!("{}...", &k.chars().take(20).collect::<String>())),
+        form_data.pub_key_ed25519.as_ref().map(|k| format!("{}...", &k.chars().take(20).collect::<String>()))
+    );
     debug!(
         "[{}] Phone home form data: {:#?}",
         correlation_id, form_data
@@ -122,33 +134,14 @@ pub async fn phone_home_handler(
         "[{}] Converting form data to phone home data",
         correlation_id
     );
-    let mut public_keys = Vec::new();
-    if let Some(rsa_key) = &form_data.pub_key_rsa {
-        if !rsa_key.is_empty() {
-            public_keys.push(rsa_key.clone());
-        }
-    }
-    if let Some(ecdsa_key) = &form_data.pub_key_ecdsa {
-        if !ecdsa_key.is_empty() {
-            public_keys.push(ecdsa_key.clone());
-        }
-    }
-    if let Some(ed25519_key) = &form_data.pub_key_ed25519 {
-        if !ed25519_key.is_empty() {
-            public_keys.push(ed25519_key.clone());
-        }
-    }
 
     let phone_home_data = PhoneHomeData {
         instance_id: form_data.instance_id.clone(),
-        public_keys: if public_keys.is_empty() {
-            None
-        } else {
-            Some(public_keys)
-        },
         hostname: form_data.hostname.clone(),
         fqdn: form_data.fqdn.clone(),
-        ..Default::default()
+        pub_key_rsa: form_data.pub_key_rsa.clone(),
+        pub_key_ecdsa: form_data.pub_key_ecdsa.clone(),
+        pub_key_ed25519: form_data.pub_key_ed25519.clone(),
     };
 
     debug!(

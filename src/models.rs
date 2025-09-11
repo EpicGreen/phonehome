@@ -1,6 +1,4 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use tracing::{debug, info, warn};
 
 /// Cloud Init phone home data structure
@@ -24,150 +22,13 @@ pub struct PhoneHomeData {
 
     /// Ed25519 public key
     pub pub_key_ed25519: Option<String>,
-
-    /// Public SSH keys (legacy field - use specific pub_key_* fields instead)
-    pub public_keys: Option<Vec<String>>,
-
-    /// Instance metadata
-    pub instance_data: Option<InstanceData>,
-
-    /// Network configuration
-    pub network: Option<NetworkData>,
-
-    /// User data
-    pub user_data: Option<String>,
-
-    /// Vendor data
-    pub vendor_data: Option<String>,
-
-    /// Cloud name (e.g., "aws", "gce", "azure")
-    pub cloud_name: Option<String>,
-
-    /// Platform name
-    pub platform: Option<String>,
-
-    /// Region information
-    pub region: Option<String>,
-
-    /// Availability zone
-    pub availability_zone: Option<String>,
-
-    /// Instance type/size
-    pub instance_type: Option<String>,
-
-    /// Local hostname
-    pub local_hostname: Option<String>,
-
-    /// Additional arbitrary data
-    #[serde(flatten)]
-    pub additional_data: HashMap<String, serde_json::Value>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct InstanceData {
-    /// Instance ID
-    pub instance_id: Option<String>,
-
-    /// Instance type
-    pub instance_type: Option<String>,
-
-    /// Launch time
-    pub launch_time: Option<DateTime<Utc>>,
-
-    /// Local IPv4 address
-    pub local_ipv4: Option<String>,
-
-    /// Public IPv4 address
-    pub public_ipv4: Option<String>,
-
-    /// Local IPv6 address
-    pub local_ipv6: Option<String>,
-
-    /// Public IPv6 address
-    pub public_ipv6: Option<String>,
-
-    /// MAC address
-    pub mac: Option<String>,
-
-    /// Security groups
-    pub security_groups: Option<Vec<String>>,
-
-    /// IAM instance profile (AWS specific)
-    pub iam_instance_profile: Option<String>,
-
-    /// Additional metadata
-    #[serde(flatten)]
-    pub metadata: HashMap<String, serde_json::Value>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct NetworkData {
-    /// Network interfaces
-    pub interfaces: Option<Vec<NetworkInterface>>,
-
-    /// DNS configuration
-    pub dns: Option<DnsConfig>,
-
-    /// Routes
-    pub routes: Option<Vec<Route>>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct NetworkInterface {
-    /// Interface name
-    pub name: Option<String>,
-
-    /// MAC address
-    pub mac_address: Option<String>,
-
-    /// IPv4 addresses
-    pub ipv4_addresses: Option<Vec<String>>,
-
-    /// IPv6 addresses
-    pub ipv6_addresses: Option<Vec<String>>,
-
-    /// Interface type
-    pub interface_type: Option<String>,
-
-    /// MTU
-    pub mtu: Option<u32>,
-
-    /// Whether the interface is up
-    pub is_up: Option<bool>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct DnsConfig {
-    /// Nameservers
-    pub nameservers: Option<Vec<String>>,
-
-    /// Search domains
-    pub search: Option<Vec<String>>,
-
-    /// Domain
-    pub domain: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Route {
-    /// Destination network
-    pub destination: Option<String>,
-
-    /// Gateway
-    pub gateway: Option<String>,
-
-    /// Interface
-    pub interface: Option<String>,
-
-    /// Metric
-    pub metric: Option<u32>,
 }
 
 /// Processed data that will be passed to the external application
 #[derive(Debug, Clone, Serialize)]
 pub struct ProcessedPhoneHomeData {
     /// Timestamp when the request was received
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
 
     /// Original instance ID
     pub instance_id: Option<String>,
@@ -194,49 +55,9 @@ impl PhoneHomeData {
             "pub_key_rsa" => self.pub_key_rsa.clone(),
             "pub_key_ecdsa" => self.pub_key_ecdsa.clone(),
             "pub_key_ed25519" => self.pub_key_ed25519.clone(),
-            "public_keys" => self.public_keys.as_ref().map(|keys| keys.join(",")),
-            // Legacy/unsupported fields kept for backward compatibility but should not be used
-            "cloud_name" => self.cloud_name.clone(),
-            "platform" => self.platform.clone(),
-            "region" => self.region.clone(),
-            "availability_zone" => self.availability_zone.clone(),
-            "instance_type" => self.instance_type.clone(),
-            "local_hostname" => self.local_hostname.clone(),
-            "local_ipv4" => self
-                .instance_data
-                .as_ref()
-                .and_then(|data| data.local_ipv4.clone()),
-            "public_ipv4" => self
-                .instance_data
-                .as_ref()
-                .and_then(|data| data.public_ipv4.clone()),
-            "local_ipv6" => self
-                .instance_data
-                .as_ref()
-                .and_then(|data| data.local_ipv6.clone()),
-            "public_ipv6" => self
-                .instance_data
-                .as_ref()
-                .and_then(|data| data.public_ipv6.clone()),
-            "mac" => self
-                .instance_data
-                .as_ref()
-                .and_then(|data| data.mac.clone()),
-            "security_groups" => self
-                .instance_data
-                .as_ref()
-                .and_then(|data| data.security_groups.as_ref())
-                .map(|groups| groups.join(",")),
             _ => {
-                // Try to extract from additional_data
-                self.additional_data
-                    .get(field_name)
-                    .map(|value| match value {
-                        serde_json::Value::String(s) => s.clone(),
-                        serde_json::Value::Number(n) => n.to_string(),
-                        serde_json::Value::Bool(b) => b.to_string(),
-                        _ => value.to_string(),
-                    })
+                warn!("Unknown field requested: '{}'", field_name);
+                None
             }
         };
 
@@ -258,7 +79,7 @@ impl PhoneHomeData {
 
         // Add timestamp if configured
         if config.include_timestamp {
-            let timestamp = Utc::now().to_rfc3339();
+            let timestamp = chrono::Utc::now().to_rfc3339();
             debug!("Adding timestamp: {}", timestamp);
             extracted_fields.push(timestamp);
         } else {
@@ -311,7 +132,7 @@ impl PhoneHomeData {
         );
 
         let processed_data = ProcessedPhoneHomeData {
-            timestamp: Utc::now(),
+            timestamp: chrono::Utc::now(),
             instance_id: self.instance_id.clone(),
             extracted_fields,
             formatted_data,
@@ -333,10 +154,8 @@ mod tests {
         let mut phone_home_data = PhoneHomeData::default();
         phone_home_data.instance_id = Some("i-1234567890abcdef0".to_string());
         phone_home_data.hostname = Some("test-host".to_string());
-        phone_home_data.public_keys = Some(vec![
-            "ssh-rsa AAAAB3...".to_string(),
-            "ssh-ed25519 AAAAC3...".to_string(),
-        ]);
+        phone_home_data.pub_key_rsa = Some("ssh-rsa AAAAB3...".to_string());
+        phone_home_data.pub_key_ed25519 = Some("ssh-ed25519 AAAAC3...".to_string());
 
         assert_eq!(
             phone_home_data.extract_field_value("instance_id"),
@@ -347,8 +166,12 @@ mod tests {
             Some("test-host".to_string())
         );
         assert_eq!(
-            phone_home_data.extract_field_value("public_keys"),
-            Some("ssh-rsa AAAAB3...,ssh-ed25519 AAAAC3...".to_string())
+            phone_home_data.extract_field_value("pub_key_rsa"),
+            Some("ssh-rsa AAAAB3...".to_string())
+        );
+        assert_eq!(
+            phone_home_data.extract_field_value("pub_key_ed25519"),
+            Some("ssh-ed25519 AAAAC3...".to_string())
         );
         assert_eq!(phone_home_data.extract_field_value("nonexistent"), None);
     }
@@ -389,5 +212,29 @@ mod tests {
         assert_eq!(processed.extracted_fields.len(), 3);
         assert!(processed.formatted_data.contains("test-host"));
         assert!(processed.formatted_data.contains("i-1234567890abcdef0"));
+    }
+
+    #[test]
+    fn test_all_supported_fields() {
+        let phone_home_data = PhoneHomeData {
+            instance_id: Some("i-1234567890abcdef0".to_string()),
+            hostname: Some("test-host".to_string()),
+            fqdn: Some("test-host.example.com".to_string()),
+            pub_key_rsa: Some("ssh-rsa AAAAB3...".to_string()),
+            pub_key_ecdsa: Some("ecdsa-sha2-nistp256 AAAAE2V...".to_string()),
+            pub_key_ed25519: Some("ssh-ed25519 AAAAC3...".to_string()),
+        };
+
+        // Test all supported fields
+        assert!(phone_home_data.extract_field_value("instance_id").is_some());
+        assert!(phone_home_data.extract_field_value("hostname").is_some());
+        assert!(phone_home_data.extract_field_value("fqdn").is_some());
+        assert!(phone_home_data.extract_field_value("pub_key_rsa").is_some());
+        assert!(phone_home_data
+            .extract_field_value("pub_key_ecdsa")
+            .is_some());
+        assert!(phone_home_data
+            .extract_field_value("pub_key_ed25519")
+            .is_some());
     }
 }
