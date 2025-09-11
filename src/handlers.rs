@@ -101,47 +101,62 @@ pub async fn phone_home_handler(
         );
         return web::bad_request().await;
     }
-    
+
     // Log incoming POST form data for debugging
     debug!(
         "[{}] Received form data - instance_id: {:?}, hostname: {:?}, fqdn: {:?}",
-        correlation_id,
-        form_data.instance_id,
-        form_data.hostname,
-        form_data.fqdn
+        correlation_id, form_data.instance_id, form_data.hostname, form_data.fqdn
     );
-    
+
     // Log SSH keys separately with truncation for security
     if form_data.pub_key_rsa.is_some() {
         debug!(
             "[{}] RSA key present: {}...",
             correlation_id,
-            form_data.pub_key_rsa.as_ref().unwrap().chars().take(20).collect::<String>()
+            form_data
+                .pub_key_rsa
+                .as_ref()
+                .unwrap()
+                .chars()
+                .take(20)
+                .collect::<String>()
         );
     }
     if form_data.pub_key_ecdsa.is_some() {
         debug!(
             "[{}] ECDSA key present: {}...",
             correlation_id,
-            form_data.pub_key_ecdsa.as_ref().unwrap().chars().take(20).collect::<String>()
+            form_data
+                .pub_key_ecdsa
+                .as_ref()
+                .unwrap()
+                .chars()
+                .take(20)
+                .collect::<String>()
         );
     }
     if form_data.pub_key_ed25519.is_some() {
         debug!(
             "[{}] Ed25519 key present: {}...",
             correlation_id,
-            form_data.pub_key_ed25519.as_ref().unwrap().chars().take(20).collect::<String>()
+            form_data
+                .pub_key_ed25519
+                .as_ref()
+                .unwrap()
+                .chars()
+                .take(20)
+                .collect::<String>()
         );
     }
-    
+
     // Check if all form fields are empty
-    let all_empty = form_data.instance_id.is_none() 
-        && form_data.hostname.is_none() 
-        && form_data.fqdn.is_none() 
-        && form_data.pub_key_rsa.is_none() 
-        && form_data.pub_key_ecdsa.is_none() 
+    let all_empty = form_data.instance_id.is_none()
+        && form_data.hostname.is_none()
+        && form_data.fqdn.is_none()
+        && form_data.pub_key_rsa.is_none()
+        && form_data.pub_key_ecdsa.is_none()
         && form_data.pub_key_ed25519.is_none();
-    
+
     if all_empty {
         warn!(
             "[{}] All form fields are empty - possible form parsing issue or empty request",
