@@ -1,5 +1,5 @@
 Name:           phonehome
-Version:        0.1.6
+Version:        0.1.7
 Release:        1%{?dist}
 Summary:        Secure HTTPS server for Cloud Init phone home requests
 
@@ -131,7 +131,7 @@ update docs
 %dir %attr(750,root,phonehome) %{_sysconfdir}/%{name}
 
 %changelog
-* Thu Sep 11 2025 Ante de Baas <packages@debaas.net> - 0.1.6-1
+* Thu Sep 11 2025 Ante de Baas <packages@debaas.net> - 0.1.7-1
 - Initial package
 - HTTPS server for Cloud Init phone home requests
 - TOML configuration with token-based authentication
