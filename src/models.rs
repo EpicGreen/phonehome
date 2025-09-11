@@ -61,9 +61,10 @@ impl PhoneHomeData {
             }
         };
 
-        match &result {
-            Some(value) => debug!("Field '{}' extracted: '{}'", field_name, value),
-            None => debug!("Field '{}' not found or empty", field_name),
+        if let Some(value) = &result {
+            debug!("Field '{}' extracted: '{}'", field_name, value);
+        } else {
+            debug!("Field '{}' not found or empty", field_name);
         }
 
         result
@@ -151,11 +152,13 @@ mod tests {
 
     #[test]
     fn test_field_extraction() {
-        let mut phone_home_data = PhoneHomeData::default();
-        phone_home_data.instance_id = Some("i-1234567890abcdef0".to_string());
-        phone_home_data.hostname = Some("test-host".to_string());
-        phone_home_data.pub_key_rsa = Some("ssh-rsa AAAAB3...".to_string());
-        phone_home_data.pub_key_ed25519 = Some("ssh-ed25519 AAAAC3...".to_string());
+        let phone_home_data = PhoneHomeData {
+            instance_id: Some("i-1234567890abcdef0".to_string()),
+            hostname: Some("test-host".to_string()),
+            pub_key_rsa: Some("ssh-rsa AAAAB3...".to_string()),
+            pub_key_ed25519: Some("ssh-ed25519 AAAAC3...".to_string()),
+            ..Default::default()
+        };
 
         assert_eq!(
             phone_home_data.extract_field_value("instance_id"),
@@ -178,9 +181,11 @@ mod tests {
 
     #[test]
     fn test_data_processing() {
-        let mut phone_home_data = PhoneHomeData::default();
-        phone_home_data.instance_id = Some("i-1234567890abcdef0".to_string());
-        phone_home_data.hostname = Some("test-host".to_string());
+        let phone_home_data = PhoneHomeData {
+            instance_id: Some("i-1234567890abcdef0".to_string()),
+            hostname: Some("test-host".to_string()),
+            ..Default::default()
+        };
 
         let config = PhoneHomeConfig {
             fields_to_extract: vec!["hostname".to_string(), "instance_id".to_string()],
@@ -196,9 +201,11 @@ mod tests {
 
     #[test]
     fn test_data_processing_with_timestamp_and_instance_id() {
-        let mut phone_home_data = PhoneHomeData::default();
-        phone_home_data.instance_id = Some("i-1234567890abcdef0".to_string());
-        phone_home_data.hostname = Some("test-host".to_string());
+        let phone_home_data = PhoneHomeData {
+            instance_id: Some("i-1234567890abcdef0".to_string()),
+            hostname: Some("test-host".to_string()),
+            ..Default::default()
+        };
 
         let config = PhoneHomeConfig {
             fields_to_extract: vec!["hostname".to_string()],

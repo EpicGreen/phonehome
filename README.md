@@ -418,6 +418,45 @@ cargo test -- --nocapture
 # Test specific module
 cargo test config_tests
 cargo test integration_tests
+```
+
+### Code Quality
+
+This project includes automated code quality checks to ensure consistent code style and catch common issues.
+
+#### Git Hooks
+
+A pre-commit hook is automatically installed that runs:
+
+1. **cargo clippy** - Linting and static analysis
+2. **cargo fmt** - Code formatting
+
+The hook will:
+- Run clippy with warnings treated as errors (`-D warnings`)
+- If clippy passes, automatically run `cargo fmt` to format code
+- Add any formatted files back to the commit
+- Allow the commit to proceed only if both checks pass
+
+The pre-commit hook is located at `.git/hooks/pre-commit` and is automatically executable.
+
+#### Manual Code Quality Checks
+
+You can also run code quality checks manually:
+
+```bash
+cargo clippy --all-targets --all-features -- -D warnings
+cargo fmt --all
+
+# Check formatting without changing files
+cargo fmt --all -- --check
+```
+
+#### Code Quality Requirements
+
+- All clippy warnings must be resolved before committing
+- Code must be formatted according to rustfmt standards
+- New code should include appropriate tests
+- External dependencies should be justified and documented
 
 # Load testing
 cargo test load_tests

@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use axum::{
     body::Bytes,
     extract::{ConnectInfo, Path, State},
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Json, Response},
 };
 use serde::Deserialize;
@@ -48,6 +49,7 @@ pub struct PhoneHomeFormData {
 }
 
 impl RateLimiter {
+    #[must_use]
     pub fn new(max_requests: usize, window_seconds: u64) -> Self {
         Self {
             requests: Arc::new(RwLock::new(HashMap::new())),
@@ -83,6 +85,7 @@ pub async fn phone_home_handler(
     State(state): State<AppState>,
     Path(token): Path<String>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     raw_body: Bytes,
 ) -> Response {
     // Generate correlation ID for this request
@@ -93,6 +96,20 @@ pub async fn phone_home_handler(
         "Received phone home request [{}] from {} with token: {}",
         correlation_id, client_ip, token
     );
+
+    // Validate Content-Type header (maintain original Axum Form behavior)
+    let content_type = headers
+        .get("content-type")
+        .and_then(|ct| ct.to_str().ok())
+        .unwrap_or("");
+
+    if !content_type.starts_with("application/x-www-form-urlencoded") {
+        warn!(
+            "[{}] Unsupported media type: {}",
+            correlation_id, content_type
+        );
+        return (StatusCode::UNSUPPORTED_MEDIA_TYPE, "Unsupported Media Type").into_response();
+    }
 
     // Log the raw request body for debugging
     debug!(
@@ -111,12 +128,9 @@ pub async fn phone_home_handler(
     }
 
     // Parse the raw body as form data
-    let form_data = match parse_form_data(&raw_body, &correlation_id).await {
-        Ok(data) => data,
-        Err(_) => {
-            warn!("[{}] Failed to parse form data", correlation_id);
-            return web::bad_request().await;
-        }
+    let Ok(form_data) = parse_form_data(&raw_body, &correlation_id) else {
+        warn!("[{}] Failed to parse form data", correlation_id);
+        return web::bad_request().await;
     };
 
     // Log incoming POST form data for debugging
@@ -316,16 +330,15 @@ pub async fn phone_home_handler(
 }
 
 /// Parse form data from raw bytes
-async fn parse_form_data(
+fn parse_form_data(
     raw_body: &[u8],
     correlation_id: &Uuid,
 ) -> Result<PhoneHomeFormData, Box<dyn std::error::Error + Send + Sync>> {
     use std::str;
 
     // Convert bytes to string
-    let body_str = str::from_utf8(raw_body).map_err(|e| {
+    let body_str = str::from_utf8(raw_body).inspect_err(|e| {
         warn!("[{}] Invalid UTF-8 in request body: {}", correlation_id, e);
-        e
     })?;
 
     // Parse URL-encoded form data manually
@@ -351,12 +364,12 @@ async fn parse_form_data(
             })?;
 
             match key {
-                "pub_key_rsa" => form_data.pub_key_rsa = Some(decoded_value.into_owned()),
-                "pub_key_ecdsa" => form_data.pub_key_ecdsa = Some(decoded_value.into_owned()),
-                "pub_key_ed25519" => form_data.pub_key_ed25519 = Some(decoded_value.into_owned()),
-                "instance_id" => form_data.instance_id = Some(decoded_value.into_owned()),
-                "hostname" => form_data.hostname = Some(decoded_value.into_owned()),
-                "fqdn" => form_data.fqdn = Some(decoded_value.into_owned()),
+                "pub_key_rsa" => form_data.pub_key_rsa = Some(decoded_value.to_string()),
+                "pub_key_ecdsa" => form_data.pub_key_ecdsa = Some(decoded_value.to_string()),
+                "pub_key_ed25519" => form_data.pub_key_ed25519 = Some(decoded_value.to_string()),
+                "instance_id" => form_data.instance_id = Some(decoded_value.to_string()),
+                "hostname" => form_data.hostname = Some(decoded_value.to_string()),
+                "fqdn" => form_data.fqdn = Some(decoded_value.to_string()),
                 _ => {
                     debug!("[{}] Unknown form field: {}", correlation_id, key);
                 }
@@ -467,7 +480,7 @@ async fn execute_external_app(
     // SECURITY: Use sanitized data with optional quoting
     // Rust's arg() method handles argument separation safely
     let data_arg = if config.quote_data {
-        format!("\"{}\"", sanitized_data)
+        format!("\"{sanitized_data}\"")
     } else {
         sanitized_data.to_string()
     };
@@ -549,7 +562,7 @@ async fn execute_external_app(
             }
         }
         Ok(Err(err)) => {
-            let error_msg = format!("Failed to execute external application: {}", err);
+            let error_msg = format!("Failed to execute external application: {err}");
             error!(
                 "[{}] {} (execution time: {:?})",
                 correlation_id, error_msg, execution_time
