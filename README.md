@@ -281,13 +281,13 @@ The following fields can be extracted from Cloud Init phone home data:
 - `security_groups` - Security groups (comma-separated)
 
 ### Custom Fields
-Any additional fields present in the phone home JSON data can be extracted by name.
+Any additional fields present in the phone home form data can be extracted by name.
 
 ## API Endpoints
 
 ### Phone Home Endpoint
 - **URL**: `POST /phone-home/{token}`
-- **Content-Type**: `application/json`
+- **Content-Type**: `application/x-www-form-urlencoded`
 - **Description**: Receives Cloud Init phone home data
 - **Response**: JSON with processing status
 

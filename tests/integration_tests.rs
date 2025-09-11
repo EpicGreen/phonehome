@@ -78,7 +78,12 @@ fn create_test_config() -> Config {
     }
 }
 
-// Helper function to create test phone home data
+// Helper function to create test phone home form data
+fn create_test_phone_home_form_data() -> String {
+    "instance_id=i-1234567890abcdef0&hostname=test-instance&fqdn=test-instance.example.com&pub_key_rsa=ssh-rsa%20AAAAB3NzaC1yc2EAAAADAQABAAABgQC7...%20test-key-1&pub_key_ed25519=ssh-ed25519%20AAAAC3NzaC1lZDI1NTE5AAAAI...%20test-key-2".to_string()
+}
+
+// Helper function to create test phone home data (legacy for models tests)
 fn create_test_phone_home_data() -> Value {
     json!({
         "instance_id": "i-1234567890abcdef0",
@@ -475,13 +480,13 @@ mod integration_tests {
     #[tokio::test]
     async fn test_phone_home_endpoint_valid_token() {
         let app = create_test_app();
-        let phone_home_data = create_test_phone_home_data();
+        let form_data = create_test_phone_home_form_data();
 
         let request = Request::builder()
             .uri("/phone-home/test-token-123")
             .method("POST")
-            .header("content-type", "application/json")
-            .body(Body::from(serde_json::to_string(&phone_home_data).unwrap()))
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(form_data))
             .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
@@ -499,47 +504,46 @@ mod integration_tests {
     #[tokio::test]
     async fn test_phone_home_endpoint_invalid_token() {
         let app = create_test_app();
-        let phone_home_data = create_test_phone_home_data();
+        let form_data = create_test_phone_home_form_data();
 
         let request = Request::builder()
             .uri("/phone-home/invalid-token")
             .method("POST")
-            .header("content-type", "application/json")
-            .body(Body::from(serde_json::to_string(&phone_home_data).unwrap()))
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(form_data))
             .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
+        // With valid form data but invalid token, we get 401
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
-    async fn test_phone_home_endpoint_malformed_json() {
+    async fn test_phone_home_endpoint_malformed_form_data() {
         let app = create_test_app();
 
         let request = Request::builder()
             .uri("/phone-home/test-token-123")
             .method("POST")
-            .header("content-type", "application/json")
-            .body(Body::from("{\"invalid\": json}"))
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from("invalid=form=data=&=&"))
             .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        // Form parsing errors are handled gracefully and should succeed
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[tokio::test]
     async fn test_phone_home_endpoint_minimal_data() {
         let app = create_test_app();
-        let minimal_data = json!({
-            "instance_id": "i-minimal",
-            "hostname": "minimal-host"
-        });
+        let minimal_data = "instance_id=i-minimal-test";
 
         let request = Request::builder()
             .uri("/phone-home/test-token-123")
             .method("POST")
-            .header("content-type", "application/json")
-            .body(Body::from(serde_json::to_string(&minimal_data).unwrap()))
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(Body::from(minimal_data))
             .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
@@ -551,18 +555,18 @@ mod integration_tests {
         let body_str = String::from_utf8(body.to_vec()).unwrap();
 
         assert!(body_str.contains("\"status\":\"success\""));
-        assert!(body_str.contains("\"instance_id\":\"i-minimal\""));
+        assert!(body_str.contains("\"instance_id\":\"i-minimal-test\""));
     }
 
     #[tokio::test]
     async fn test_phone_home_endpoint_missing_content_type() {
         let app = create_test_app();
-        let phone_home_data = create_test_phone_home_data();
+        let form_data = create_test_phone_home_form_data();
 
         let request = Request::builder()
             .uri("/phone-home/test-token-123")
             .method("POST")
-            .body(Body::from(serde_json::to_string(&phone_home_data).unwrap()))
+            .body(Body::from(form_data))
             .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
@@ -577,12 +581,13 @@ mod integration_tests {
         let request = Request::builder()
             .uri("/phone-home/test-token-123")
             .method("POST")
-            .header("content-type", "application/json")
+            .header("content-type", "application/x-www-form-urlencoded")
             .body(Body::empty())
             .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        // Empty form data should be handled gracefully
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
 
@@ -594,7 +599,7 @@ mod load_tests {
     #[tokio::test]
     async fn test_concurrent_phone_home_requests() {
         let app = create_test_app();
-        let phone_home_data = create_test_phone_home_data();
+
         let request_count = 10;
 
         let start_time = Instant::now();
@@ -602,21 +607,18 @@ mod load_tests {
         let mut tasks = Vec::new();
         for i in 0..request_count {
             let app_clone = app.clone();
-            let mut data = phone_home_data.clone();
-            data["instance_id"] = json!(format!("i-load-test-{:03}", i));
+            let form_data = format!("instance_id=i-{:08x}&hostname=test-instance&fqdn=test-instance.example.com&pub_key_rsa=ssh-rsa%20AAAAB3NzaC1yc2EAAAADAQABAAABgQC7...%20test-key-1", i);
 
-            let task: tokio::task::JoinHandle<Result<axum::response::Response, _>> =
-                tokio::spawn(async move {
-                    let request = Request::builder()
-                        .uri("/phone-home/test-token-123")
-                        .method("POST")
-                        .header("content-type", "application/json")
-                        .body(Body::from(serde_json::to_string(&data).unwrap()))
-                        .unwrap();
+            let task = tokio::spawn(async move {
+                let request = Request::builder()
+                    .uri("/phone-home/test-token-123")
+                    .method("POST")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(form_data))
+                    .unwrap();
 
-                    app_clone.oneshot(request).await
-                });
-
+                app_clone.oneshot(request).await
+            });
             tasks.push(task);
         }
 
@@ -629,7 +631,8 @@ mod load_tests {
         for result in results {
             match result {
                 Ok(Ok(response)) => {
-                    if response.status().is_success() {
+                    let status = response.status();
+                    if status.is_success() {
                         success_count += 1;
                     } else {
                         failure_count += 1;
@@ -829,8 +832,8 @@ mod web_tests {
                 Request::builder()
                     .method("POST")
                     .uri("/phone-home/wrong-token")
-                    .header("content-type", "application/json")
-                    .body(Body::from(r#"{"instance_id": "test"}"#))
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from("instance_id=test"))
                     .unwrap(),
             )
             .await
@@ -852,7 +855,7 @@ mod web_tests {
     async fn test_bad_request_error_page() {
         let app = create_test_app();
 
-        // Test with malformed JSON - this will be handled by Axum's JSON extractor
+        // Test with unsupported content type - this will be handled by Axum before reaching our handler
         let response = app
             .oneshot(
                 Request::builder()
@@ -865,16 +868,19 @@ mod web_tests {
             .await
             .unwrap();
 
-        // Axum's JSON extractor handles malformed JSON and returns 400 with plain text
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        // Axum returns 415 for unsupported media type (expecting form data, got JSON)
+        assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
 
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
 
-        // This will be Axum's default JSON parsing error message
-        assert!(body_str.contains("Failed to parse") || body_str.contains("EOF while parsing"));
+        // This will be Axum's default form content type error message
+        assert!(
+            body_str.contains("Form requests must have")
+                || body_str.contains("Content-Type: application/x-www-form-urlencoded")
+        );
     }
 
     #[tokio::test]
@@ -882,21 +888,21 @@ mod web_tests {
         let app = create_test_app();
 
         // Test with valid JSON but missing required fields to trigger our custom error page
+        // Test with unsupported content type that triggers error handling
         let response = app
             .oneshot(
                 Request::builder()
                     .method("POST")
                     .uri("/phone-home/test-token-123")
                     .header("content-type", "application/json")
-                    .body(Body::from(r#"{}"#))
+                    .body(Body::from(r#"{"malformed": "but valid json"}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
 
-        // This should succeed with valid but empty JSON (our handler will process it)
-        // The external app execution might fail, but the JSON parsing will succeed
-        assert!(response.status().is_success() || response.status().is_server_error());
+        // Should return 415 for unsupported media type
+        assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
     }
 }
 

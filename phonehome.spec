@@ -1,5 +1,5 @@
 Name:           phonehome
-Version:        0.1.5
+Version:        0.1.6
 Release:        1%{?dist}
 Summary:        Secure HTTPS server for Cloud Init phone home requests
 
@@ -138,7 +138,6 @@ fi
 - Secure HTTPS server for Cloud Init phone home requests
 - TOML configuration with token-based authentication
 - External application execution with configurable field extraction
-- Let's Encrypt certificate support
 - Systemd service integration
 - Comprehensive logging and monitoring
 - Basic functionality implementation

@@ -4,11 +4,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::{
-    extract::{ConnectInfo, Path, State},
+    extract::{ConnectInfo, Form, Path, State},
     response::{IntoResponse, Json, Response},
-    Json as JsonExtractor,
 };
-use serde_json::Value;
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
 use tokio::process::Command;
@@ -27,6 +26,24 @@ pub struct RateLimiter {
     requests: Arc<RwLock<HashMap<String, Vec<Instant>>>>,
     max_requests: usize,
     window_duration: Duration,
+}
+
+/// Cloud-init phone home form data structure
+/// This matches the form fields that cloud-init sends
+#[derive(Debug, Clone, Deserialize)]
+pub struct PhoneHomeFormData {
+    /// RSA public key
+    pub pub_key_rsa: Option<String>,
+    /// ECDSA public key
+    pub pub_key_ecdsa: Option<String>,
+    /// Ed25519 public key
+    pub pub_key_ed25519: Option<String>,
+    /// Instance ID
+    pub instance_id: Option<String>,
+    /// Hostname
+    pub hostname: Option<String>,
+    /// Fully qualified domain name
+    pub fqdn: Option<String>,
 }
 
 impl RateLimiter {
@@ -65,7 +82,7 @@ pub async fn phone_home_handler(
     State(state): State<AppState>,
     Path(token): Path<String>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    JsonExtractor(payload): JsonExtractor<Value>,
+    Form(form_data): Form<PhoneHomeFormData>,
 ) -> Response {
     // Generate correlation ID for this request
     let correlation_id = Uuid::new_v4();
@@ -85,16 +102,8 @@ pub async fn phone_home_handler(
         return web::bad_request().await;
     }
     debug!(
-        "[{}] Phone home payload: {}",
-        correlation_id,
-        serde_json::to_string_pretty(&payload).unwrap_or_default()
-    );
-    debug!(
-        "[{}] Request size: {} bytes",
-        correlation_id,
-        serde_json::to_string(&payload)
-            .map(|s| s.len())
-            .unwrap_or(0)
+        "[{}] Phone home form data: {:#?}",
+        correlation_id, form_data
     );
 
     // Verify token
@@ -108,21 +117,44 @@ pub async fn phone_home_handler(
     }
     debug!("[{}] Token authentication successful", correlation_id);
 
-    // Parse the phone home data
-    debug!("[{}] Parsing phone home data", correlation_id);
-    let phone_home_data: PhoneHomeData = match serde_json::from_value(payload) {
-        Ok(data) => {
-            debug!("[{}] Phone home data parsed successfully", correlation_id);
-            data
+    // Convert form data to PhoneHomeData structure
+    debug!(
+        "[{}] Converting form data to phone home data",
+        correlation_id
+    );
+    let mut public_keys = Vec::new();
+    if let Some(rsa_key) = &form_data.pub_key_rsa {
+        if !rsa_key.is_empty() {
+            public_keys.push(rsa_key.clone());
         }
-        Err(err) => {
-            error!(
-                "[{}] Failed to parse phone home data: {}",
-                correlation_id, err
-            );
-            return web::bad_request().await;
+    }
+    if let Some(ecdsa_key) = &form_data.pub_key_ecdsa {
+        if !ecdsa_key.is_empty() {
+            public_keys.push(ecdsa_key.clone());
         }
+    }
+    if let Some(ed25519_key) = &form_data.pub_key_ed25519 {
+        if !ed25519_key.is_empty() {
+            public_keys.push(ed25519_key.clone());
+        }
+    }
+
+    let phone_home_data = PhoneHomeData {
+        instance_id: form_data.instance_id.clone(),
+        public_keys: if public_keys.is_empty() {
+            None
+        } else {
+            Some(public_keys)
+        },
+        hostname: form_data.hostname.clone(),
+        fqdn: form_data.fqdn.clone(),
+        ..Default::default()
     };
+
+    debug!(
+        "[{}] Phone home data converted successfully",
+        correlation_id
+    );
 
     info!(
         "[{}] Processing phone home data for instance: {:?}",
