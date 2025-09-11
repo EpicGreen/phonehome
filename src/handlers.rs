@@ -161,8 +161,8 @@ pub async fn phone_home_handler(
         correlation_id, phone_home_data.instance_id
     );
     debug!(
-        "[{}] Instance data: hostname={:?}, fqdn={:?}, cloud={:?}",
-        correlation_id, phone_home_data.hostname, phone_home_data.fqdn, phone_home_data.cloud_name
+        "[{}] Instance data: hostname={:?}, fqdn={:?}",
+        correlation_id, phone_home_data.hostname, phone_home_data.fqdn
     );
 
     // Process the data according to configuration

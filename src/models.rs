@@ -10,14 +10,23 @@ pub struct PhoneHomeData {
     /// Instance ID from cloud metadata
     pub instance_id: Option<String>,
 
-    /// Public SSH keys
-    pub public_keys: Option<Vec<String>>,
-
     /// Hostname of the instance
     pub hostname: Option<String>,
 
     /// Fully qualified domain name
     pub fqdn: Option<String>,
+
+    /// RSA public key
+    pub pub_key_rsa: Option<String>,
+
+    /// ECDSA public key
+    pub pub_key_ecdsa: Option<String>,
+
+    /// Ed25519 public key
+    pub pub_key_ed25519: Option<String>,
+
+    /// Public SSH keys (legacy field - use specific pub_key_* fields instead)
+    pub public_keys: Option<Vec<String>>,
 
     /// Instance metadata
     pub instance_data: Option<InstanceData>,
@@ -182,13 +191,17 @@ impl PhoneHomeData {
             "instance_id" => self.instance_id.clone(),
             "hostname" => self.hostname.clone(),
             "fqdn" => self.fqdn.clone(),
+            "pub_key_rsa" => self.pub_key_rsa.clone(),
+            "pub_key_ecdsa" => self.pub_key_ecdsa.clone(),
+            "pub_key_ed25519" => self.pub_key_ed25519.clone(),
+            "public_keys" => self.public_keys.as_ref().map(|keys| keys.join(",")),
+            // Legacy/unsupported fields kept for backward compatibility but should not be used
             "cloud_name" => self.cloud_name.clone(),
             "platform" => self.platform.clone(),
             "region" => self.region.clone(),
             "availability_zone" => self.availability_zone.clone(),
             "instance_type" => self.instance_type.clone(),
             "local_hostname" => self.local_hostname.clone(),
-            "public_keys" => self.public_keys.as_ref().map(|keys| keys.join(",")),
             "local_ipv4" => self
                 .instance_data
                 .as_ref()

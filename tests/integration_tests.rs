@@ -69,7 +69,7 @@ fn create_test_config() -> Config {
             fields_to_extract: vec![
                 "instance_id".to_string(),
                 "hostname".to_string(),
-                "cloud_name".to_string(),
+                "fqdn".to_string(),
             ],
             field_separator: "|".to_string(),
             include_timestamp: true,
@@ -89,24 +89,9 @@ fn create_test_phone_home_data() -> Value {
         "instance_id": "i-1234567890abcdef0",
         "hostname": "test-instance",
         "fqdn": "test-instance.example.com",
-        "cloud_name": "aws",
-        "platform": "ec2",
-        "region": "us-west-2",
-        "availability_zone": "us-west-2a",
-        "instance_type": "t3.micro",
-        "local_hostname": "ip-10-0-1-100",
-        "public_keys": [
-            "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7... test-key-1",
-            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... test-key-2"
-        ],
-        "instance_data": {
-            "instance_id": "i-1234567890abcdef0",
-            "instance_type": "t3.micro",
-            "local_ipv4": "10.0.1.100",
-            "public_ipv4": "203.0.113.50",
-            "mac": "02:00:17:04:e9:42",
-            "security_groups": ["sg-12345678", "sg-87654321"]
-        }
+        "pub_key_rsa": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7... test-key-1",
+        "pub_key_ecdsa": "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTY... test-key-2",
+        "pub_key_ed25519": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... test-key-3"
     })
 }
 
@@ -211,21 +196,18 @@ mod models_tests {
             Some("test-instance".to_string())
         );
         assert_eq!(
-            data.extract_field_value("cloud_name"),
-            Some("aws".to_string())
+            data.extract_field_value("pub_key_rsa"),
+            Some("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7... test-key-1".to_string())
         );
         assert_eq!(
-            data.extract_field_value("local_ipv4"),
-            Some("10.0.1.100".to_string())
+            data.extract_field_value("pub_key_ecdsa"),
+            Some("ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTY... test-key-2".to_string())
         );
         assert_eq!(
-            data.extract_field_value("public_ipv4"),
-            Some("203.0.113.50".to_string())
+            data.extract_field_value("pub_key_ed25519"),
+            Some("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... test-key-3".to_string())
         );
-        assert_eq!(
-            data.extract_field_value("security_groups"),
-            Some("sg-12345678,sg-87654321".to_string())
-        );
+
         assert_eq!(data.extract_field_value("nonexistent"), None);
     }
 
@@ -233,14 +215,14 @@ mod models_tests {
     fn test_phone_home_data_processing() {
         let data: PhoneHomeData = serde_json::from_value(create_test_phone_home_data()).unwrap();
         let config = PhoneHomeConfig {
-            fields_to_extract: vec!["hostname".to_string(), "cloud_name".to_string()],
+            fields_to_extract: vec!["hostname".to_string(), "fqdn".to_string()],
             field_separator: "|".to_string(),
             include_timestamp: false,
             include_instance_id: false,
         };
 
         let processed = data.process(&config);
-        assert_eq!(processed.formatted_data, "test-instance|aws");
+        assert_eq!(processed.formatted_data, "test-instance|test-instance.example.com");
         assert_eq!(processed.extracted_fields.len(), 2);
         assert_eq!(
             processed.instance_id,
@@ -272,13 +254,10 @@ mod models_tests {
 
         assert_eq!(data.instance_id, Some("i-1234567890abcdef0".to_string()));
         assert_eq!(data.hostname, Some("test-instance".to_string()));
-        assert_eq!(data.cloud_name, Some("aws".to_string()));
-        assert!(data.public_keys.is_some());
-        assert!(data.instance_data.is_some());
-
-        let instance_data = data.instance_data.unwrap();
-        assert_eq!(instance_data.local_ipv4, Some("10.0.1.100".to_string()));
-        assert_eq!(instance_data.public_ipv4, Some("203.0.113.50".to_string()));
+        assert_eq!(data.fqdn, Some("test-instance.example.com".to_string()));
+        assert_eq!(data.pub_key_rsa, Some("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7... test-key-1".to_string()));
+        assert_eq!(data.pub_key_ecdsa, Some("ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTY... test-key-2".to_string()));
+        assert_eq!(data.pub_key_ed25519, Some("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... test-key-3".to_string()));
     }
 
     #[test]

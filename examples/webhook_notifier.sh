@@ -24,15 +24,17 @@ log() {
 parse_data() {
     IFS='|' read -ra FIELDS <<< "$DATA"
     
-    # Extract fields based on expected format:
-    # timestamp|instance_id|hostname|public_ipv4|local_ipv4|cloud_name|region
+    # Extract fields based on expected format from cloud-init form data:
+    # timestamp|instance_id|hostname|fqdn|public_ipv4|local_ipv4|cloud_name|region|availability_zone
+    # Note: Cloud-init sends data as application/x-www-form-urlencoded with fields:
+    # instance_id, hostname, fqdn, pub_key_rsa, pub_key_ecdsa, pub_key_ed25519
     TIMESTAMP="${FIELDS[0]:-unknown}"
     INSTANCE_ID="${FIELDS[1]:-unknown}"
     HOSTNAME="${FIELDS[2]:-unknown}"
-    PUBLIC_IP="${FIELDS[3]:-unknown}"
-    LOCAL_IP="${FIELDS[4]:-unknown}"
-    CLOUD_NAME="${FIELDS[5]:-unknown}"
-    REGION="${FIELDS[6]:-unknown}"
+    FQDN="${FIELDS[3]:-unknown}"
+    PUB_KEY_RSA="${FIELDS[4]:-unknown}"
+    PUB_KEY_ECDSA="${FIELDS[5]:-unknown}"
+    PUB_KEY_ED25519="${FIELDS[6]:-unknown}"
 }
 
 # Create Slack-formatted payload
@@ -61,6 +63,10 @@ create_slack_payload() {
                 },
                 {
                     "type": "mrkdwn",
+                    "text": "*FQDN:*\n\`$FQDN\`"
+                },
+                {
+                    "type": "mrkdwn",
                     "text": "*Public IP:*\n\`$PUBLIC_IP\`"
                 },
                 {
@@ -74,6 +80,10 @@ create_slack_payload() {
                 {
                     "type": "mrkdwn",
                     "text": "*Region:*\n$REGION"
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": "*AZ:*\n$AVAILABILITY_ZONE"
                 }
             ]
         },
@@ -98,43 +108,44 @@ create_discord_payload() {
     "embeds": [
         {
             "title": "🚀 New Cloud Instance Phone Home",
-            "color": 65280,
+            "color": 3066993,
+            "timestamp": "$TIMESTAMP",
             "fields": [
                 {
                     "name": "Instance ID",
-                    "value": "\`$INSTANCE_ID\`",
+                    "value": "$INSTANCE_ID",
                     "inline": true
                 },
                 {
                     "name": "Hostname",
-                    "value": "\`$HOSTNAME\`",
+                    "value": "$HOSTNAME",
                     "inline": true
                 },
                 {
-                    "name": "Public IP",
-                    "value": "\`$PUBLIC_IP\`",
-                    "inline": true
+                    "name": "FQDN",
+                    "value": "$FQDN",
+                    "inline": false
                 },
                 {
-                    "name": "Local IP",
-                    "value": "\`$LOCAL_IP\`",
-                    "inline": true
+                    "name": "RSA Key",
+                    "value": "$PUB_KEY_RSA",
+                    "inline": false
                 },
                 {
-                    "name": "Cloud Provider",
-                    "value": "$CLOUD_NAME",
-                    "inline": true
+                    "name": "ECDSA Key",
+                    "value": "$PUB_KEY_ECDSA",
+                    "inline": false
                 },
                 {
-                    "name": "Region",
-                    "value": "$REGION",
-                    "inline": true
+                    "name": "Ed25519 Key",
+                    "value": "$PUB_KEY_ED25519",
+                    "inline": false
+                },
+                {
+                    "name": "Raw Data",
+                    "value": "$DATA"
                 }
-            ],
-            "timestamp": "$TIMESTAMP",
-            "footer": {
-                "text": "PhoneHome Server"
-            }
+            ]
         }
     ]
 }
@@ -163,6 +174,10 @@ create_teams_payload() {
                     "value": "$HOSTNAME"
                 },
                 {
+                    "name": "FQDN",
+                    "value": "$FQDN"
+                },
+                {
                     "name": "Public IP",
                     "value": "$PUBLIC_IP"
                 },
@@ -177,6 +192,10 @@ create_teams_payload() {
                 {
                     "name": "Region",
                     "value": "$REGION"
+                },
+                {
+                    "name": "Availability Zone",
+                    "value": "$AVAILABILITY_ZONE"
                 },
                 {
                     "name": "Timestamp",
@@ -199,10 +218,10 @@ create_generic_payload() {
     "instance": {
         "id": "$INSTANCE_ID",
         "hostname": "$HOSTNAME",
-        "public_ip": "$PUBLIC_IP",
-        "local_ip": "$LOCAL_IP",
-        "cloud_provider": "$CLOUD_NAME",
-        "region": "$REGION"
+        "fqdn": "$FQDN",
+        "pub_key_rsa": "$PUB_KEY_RSA",
+        "pub_key_ecdsa": "$PUB_KEY_ECDSA",
+        "pub_key_ed25519": "$PUB_KEY_ED25519"
     },
     "raw_data": "$DATA"
 }
@@ -256,7 +275,7 @@ main() {
     # Parse the data
     parse_data
     
-    log "INFO" "Parsed data - Instance: $INSTANCE_ID, Hostname: $HOSTNAME, Cloud: $CLOUD_NAME"
+    log "INFO" "Parsed data - Instance: $INSTANCE_ID, Hostname: $HOSTNAME, FQDN: $FQDN"
     
     # Create payload based on webhook type
     local payload

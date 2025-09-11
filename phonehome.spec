@@ -28,18 +28,21 @@ Suggests:       bash-completion
 
 %description
 PhoneHome Server is a secure HTTPS server written in Rust that handles Cloud Init
-phone home requests. The server processes incoming phone home data, extracts
-configured fields, and executes external applications with the processed data.
+phone home requests with form data (application/x-www-form-urlencoded). The server
+processes incoming phone home data, extracts configured fields, and executes
+external applications with the processed data.
 
 Features:
 - HTTPS support with Let's Encrypt integration
-- Cloud Init phone home request handling
+- Cloud Init phone home form data handling (application/x-www-form-urlencoded)
+- Standard cloud-init field support (instance_id, hostname, fqdn, SSH keys)
 - Configurable data processing and field extraction
 - External application execution with timeout handling
 - Token-based security
 - TOML configuration
-- Comprehensive logging
+- Comprehensive logging with correlation IDs
 - Health check endpoint
+- Rate limiting and input sanitization
 
 %prep
 %autosetup
@@ -78,6 +81,8 @@ install -m 644 README.md %{buildroot}%{_docdir}/%{name}/
 install -m 644 LICENSE %{buildroot}%{_docdir}/%{name}/
 install -m 644 examples/database_logger.sh %{buildroot}%{_docdir}/%{name}/examples/
 install -m 644 examples/webhook_notifier.sh %{buildroot}%{_docdir}/%{name}/examples/
+install -m 644 examples/cloud-init-config.yaml %{buildroot}%{_docdir}/%{name}/examples/
+install -m 755 test_cloud_init_request.sh %{buildroot}%{_docdir}/%{name}/
 
 # Install configuration directory and example config
 install -d %{buildroot}%{_sysconfdir}/%{name}
@@ -122,8 +127,7 @@ fi
 %files
 %license %{_docdir}/%{name}/LICENSE
 %doc %{_docdir}/%{name}/README.md
-%doc %{_docdir}/%{name}/examples/database_logger.sh
-%doc %{_docdir}/%{name}/examples/webhook_notifier.sh
+%doc %{_docdir}/%{name}/examples/cloud-init-config.yaml
 %{_bindir}/%{name}
 %{_unitdir}/%{name}.service
 %config(noreplace) %{_sysconfdir}/%{name}/config.toml
@@ -135,10 +139,9 @@ fi
 %changelog
 * Wed Sep 3 2025 Ante de Baas <packages@debaas.net> - 0.1.1-1
 - Initial package
-- Secure HTTPS server for Cloud Init phone home requests
+- HTTPS server for Cloud Init phone home requests
 - TOML configuration with token-based authentication
 - External application execution with configurable field extraction
 - Systemd service integration
 - Comprehensive logging and monitoring
-- Basic functionality implementation
-- Core features and configuration system
+- Full support for standard cloud-init phone home requests

@@ -81,35 +81,30 @@ sanitize_input = true
 quote_data = true
 
 [phone_home]
-# List of fields to extract from the Cloud Init phone home data
-# Available fields include:
+# List of fields to extract from the Cloud Init phone home form data
+# Available fields include only those officially supported by cloud-init:
+# 
+# Cloud-Init Standard Fields:
 # - instance_id: Cloud instance identifier
-# - hostname: System hostname
+# - hostname: System hostname  
 # - fqdn: Fully qualified domain name
-# - cloud_name: Cloud provider name (aws, gce, azure, etc.)
-# - platform: Platform information
-# - region: Cloud region
-# - availability_zone: Availability zone
-# - instance_type: Instance type/size
-# - local_hostname: Local hostname
-# - public_keys: SSH public keys (comma-separated)
-# - local_ipv4: Local IPv4 address
-# - public_ipv4: Public IPv4 address
-# - local_ipv6: Local IPv6 address
-# - public_ipv6: Public IPv6 address
-# - mac: MAC address
-# - security_groups: Security groups (comma-separated)
-# You can also specify custom fields that may be present in the phone home data
+# - pub_key_rsa: RSA public key
+# - pub_key_ecdsa: ECDSA public key 
+# - pub_key_ed25519: Ed25519 public key
+#
+# Note: Only the above fields are officially supported by cloud-init phone home module.
+# Any other fields will be ignored by cloud-init and should not be used.
+#
+# Note: Cloud-init sends data as application/x-www-form-urlencoded
+# with the standard fields above. Additional fields can be specified
+# and will be extracted if present in the form data.
 fields_to_extract = [
     "instance_id",
     "hostname",
     "fqdn",
-    "public_ipv4",
-    "local_ipv4",
-    "cloud_name",
-    "region",
-    "availability_zone",
-    "instance_type"
+    "pub_key_rsa",
+    "pub_key_ecdsa",
+    "pub_key_ed25519"
 ]
 
 # Separator character to use between extracted fields

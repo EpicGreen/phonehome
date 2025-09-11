@@ -16,10 +16,10 @@ RestartSec=5
 StartLimitInterval=60s
 StartLimitBurst=3
 
-# Pre-start script to ensure log directory exists
-ExecStartPre=/bin/mkdir -p /var/log/phonehome
-ExecStartPre=/bin/chown phonehome:phonehome /var/log/phonehome
-ExecStartPre=/bin/chmod 755 /var/log/phonehome
+# Pre-start script to ensure directories exist
+ExecStartPre=/bin/mkdir -p /var/log/phonehome /var/lib/phonehome
+ExecStartPre=/bin/chown phonehome:phonehome /var/log/phonehome /var/lib/phonehome
+ExecStartPre=/bin/chmod 755 /var/log/phonehome /var/lib/phonehome
 
 # Security settings
 NoNewPrivileges=true
@@ -49,6 +49,7 @@ WorkingDirectory=/var/lib/phonehome
 # Environment
 Environment=RUST_LOG=info
 Environment=RUST_BACKTRACE=1
+Environment=PHONEHOME_CONTENT_TYPE=application/x-www-form-urlencoded
 
 # Standard output and error
 # Logs will go to both systemd journal and configured log file

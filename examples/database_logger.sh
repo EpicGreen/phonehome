@@ -28,20 +28,23 @@ log() {
 parse_data() {
     IFS='|' read -ra FIELDS <<< "$DATA"
     
-    # Extract fields based on expected format:
-    # timestamp|instance_id|hostname|public_ipv4|local_ipv4|cloud_name|region
+    # Extract fields based on expected format from cloud-init form data:
+    # timestamp|instance_id|hostname|fqdn|pub_key_rsa|pub_key_ecdsa|pub_key_ed25519
+    # Note: Cloud-init sends data as application/x-www-form-urlencoded with fields:
+    # instance_id, hostname, fqdn, pub_key_rsa, pub_key_ecdsa, pub_key_ed25519
     TIMESTAMP="${FIELDS[0]:-$(date -Iseconds)}"
     INSTANCE_ID="${FIELDS[1]:-unknown}"
     HOSTNAME="${FIELDS[2]:-unknown}"
-    PUBLIC_IP="${FIELDS[3]:-}"
-    LOCAL_IP="${FIELDS[4]:-}"
-    CLOUD_NAME="${FIELDS[5]:-unknown}"
-    REGION="${FIELDS[6]:-unknown}"
+    FQDN="${FIELDS[3]:-unknown}"
+    PUB_KEY_RSA="${FIELDS[4]:-}"
+    PUB_KEY_ECDSA="${FIELDS[5]:-}"
+    PUB_KEY_ED25519="${FIELDS[6]:-}"
     
     # Clean up empty values
-    [ "$PUBLIC_IP" = "" ] && PUBLIC_IP="NULL"
-    [ "$LOCAL_IP" = "" ] && LOCAL_IP="NULL"
-    [ "$REGION" = "" ] && REGION="NULL"
+    [ "$FQDN" = "" ] && FQDN="NULL"
+    [ "$PUB_KEY_RSA" = "" ] && PUB_KEY_RSA="NULL"
+    [ "$PUB_KEY_ECDSA" = "" ] && PUB_KEY_ECDSA="NULL"
+    [ "$PUB_KEY_ED25519" = "" ] && PUB_KEY_ED25519="NULL"
 }
 
 # Create table if it doesn't exist
@@ -55,15 +58,14 @@ create_table() {
                 timestamp DATETIME NOT NULL,
                 instance_id VARCHAR(255) NOT NULL,
                 hostname VARCHAR(255) NOT NULL,
-                public_ip VARCHAR(45),
-                local_ip VARCHAR(45),
-                cloud_name VARCHAR(100) NOT NULL,
-                region VARCHAR(100),
+                fqdn VARCHAR(255),
+                pub_key_rsa TEXT,
+                pub_key_ecdsa TEXT,
+                pub_key_ed25519 TEXT,
                 raw_data TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_instance_id (instance_id),
                 INDEX idx_timestamp (timestamp),
-                INDEX idx_cloud_name (cloud_name)
+                INDEX idx_hostname (hostname)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
             ;;
         "postgresql")
@@ -72,16 +74,15 @@ create_table() {
                 timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
                 instance_id VARCHAR(255) NOT NULL,
                 hostname VARCHAR(255) NOT NULL,
-                public_ip INET,
-                local_ip INET,
-                cloud_name VARCHAR(100) NOT NULL,
-                region VARCHAR(100),
-                raw_data TEXT,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                fqdn VARCHAR(255),
+                pub_key_rsa TEXT,
+                pub_key_ecdsa TEXT,
+                pub_key_ed25519 TEXT,
+                raw_data TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_${TABLE_NAME}_instance_id ON $TABLE_NAME (instance_id);
             CREATE INDEX IF NOT EXISTS idx_${TABLE_NAME}_timestamp ON $TABLE_NAME (timestamp);
-            CREATE INDEX IF NOT EXISTS idx_${TABLE_NAME}_cloud_name ON $TABLE_NAME (cloud_name);"
+            CREATE INDEX IF NOT EXISTS idx_${TABLE_NAME}_hostname ON $TABLE_NAME (hostname);"
             ;;
         "sqlite")
             create_sql="CREATE TABLE IF NOT EXISTS $TABLE_NAME (
@@ -89,16 +90,15 @@ create_table() {
                 timestamp TEXT NOT NULL,
                 instance_id TEXT NOT NULL,
                 hostname TEXT NOT NULL,
-                public_ip TEXT,
-                local_ip TEXT,
-                cloud_name TEXT NOT NULL,
-                region TEXT,
-                raw_data TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                fqdn TEXT,
+                pub_key_rsa TEXT,
+                pub_key_ecdsa TEXT,
+                pub_key_ed25519 TEXT,
+                raw_data TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_${TABLE_NAME}_instance_id ON $TABLE_NAME (instance_id);
             CREATE INDEX IF NOT EXISTS idx_${TABLE_NAME}_timestamp ON $TABLE_NAME (timestamp);
-            CREATE INDEX IF NOT EXISTS idx_${TABLE_NAME}_cloud_name ON $TABLE_NAME (cloud_name);"
+            CREATE INDEX IF NOT EXISTS idx_${TABLE_NAME}_hostname ON $TABLE_NAME (hostname);"
             ;;
     esac
     
@@ -130,36 +130,33 @@ execute_sql() {
 # Insert phone home data
 insert_data() {
     local insert_sql
-    local escaped_hostname escaped_cloud_name escaped_region escaped_raw_data
+    local escaped_hostname escaped_fqdn escaped_pub_key_rsa escaped_pub_key_ecdsa escaped_pub_key_ed25519 escaped_raw_data
     
     # Escape single quotes for SQL
     escaped_hostname=$(echo "$HOSTNAME" | sed "s/'/''/g")
-    escaped_cloud_name=$(echo "$CLOUD_NAME" | sed "s/'/''/g")
-    escaped_region=$(echo "$REGION" | sed "s/'/''/g")
+    escaped_fqdn=$(echo "$FQDN" | sed "s/'/''/g")
+    escaped_pub_key_rsa=$(echo "$PUB_KEY_RSA" | sed "s/'/''/g")
+    escaped_pub_key_ecdsa=$(echo "$PUB_KEY_ECDSA" | sed "s/'/''/g")
+    escaped_pub_key_ed25519=$(echo "$PUB_KEY_ED25519" | sed "s/'/''/g")
     escaped_raw_data=$(echo "$DATA" | sed "s/'/''/g")
     
     case "$DB_TYPE" in
         "mysql"|"postgresql")
-            if [ "$PUBLIC_IP" = "NULL" ] || [ "$LOCAL_IP" = "NULL" ] || [ "$escaped_region" = "NULL" ]; then
-                insert_sql="INSERT INTO $TABLE_NAME (timestamp, instance_id, hostname, public_ip, local_ip, cloud_name, region, raw_data) 
-                           VALUES ('$TIMESTAMP', '$INSTANCE_ID', '$escaped_hostname', 
-                                   $([ "$PUBLIC_IP" = "NULL" ] && echo "NULL" || echo "'$PUBLIC_IP'"), 
-                                   $([ "$LOCAL_IP" = "NULL" ] && echo "NULL" || echo "'$LOCAL_IP'"), 
-                                   '$escaped_cloud_name', 
-                                   $([ "$escaped_region" = "NULL" ] && echo "NULL" || echo "'$escaped_region'"), 
-                                   '$escaped_raw_data');"
-            else
-                insert_sql="INSERT INTO $TABLE_NAME (timestamp, instance_id, hostname, public_ip, local_ip, cloud_name, region, raw_data) 
-                           VALUES ('$TIMESTAMP', '$INSTANCE_ID', '$escaped_hostname', '$PUBLIC_IP', '$LOCAL_IP', '$escaped_cloud_name', '$escaped_region', '$escaped_raw_data');"
-            fi
+            insert_sql="INSERT INTO $TABLE_NAME (timestamp, instance_id, hostname, fqdn, pub_key_rsa, pub_key_ecdsa, pub_key_ed25519, raw_data) 
+                       VALUES ('$TIMESTAMP', '$INSTANCE_ID', '$escaped_hostname', 
+                               $([ "$escaped_fqdn" = "NULL" ] && echo "NULL" || echo "'$escaped_fqdn'"),
+                               $([ "$PUB_KEY_RSA" = "NULL" ] && echo "NULL" || echo "'$escaped_pub_key_rsa'"), 
+                               $([ "$PUB_KEY_ECDSA" = "NULL" ] && echo "NULL" || echo "'$escaped_pub_key_ecdsa'"), 
+                               $([ "$PUB_KEY_ED25519" = "NULL" ] && echo "NULL" || echo "'$escaped_pub_key_ed25519'"), 
+                               '$escaped_raw_data');"
             ;;
         "sqlite")
-            insert_sql="INSERT INTO $TABLE_NAME (timestamp, instance_id, hostname, public_ip, local_ip, cloud_name, region, raw_data) 
+            insert_sql="INSERT INTO $TABLE_NAME (timestamp, instance_id, hostname, fqdn, pub_key_rsa, pub_key_ecdsa, pub_key_ed25519, raw_data) 
                        VALUES ('$TIMESTAMP', '$INSTANCE_ID', '$escaped_hostname', 
-                               $([ "$PUBLIC_IP" = "NULL" ] && echo "NULL" || echo "'$PUBLIC_IP'"), 
-                               $([ "$LOCAL_IP" = "NULL" ] && echo "NULL" || echo "'$LOCAL_IP'"), 
-                               '$escaped_cloud_name', 
-                               $([ "$escaped_region" = "NULL" ] && echo "NULL" || echo "'$escaped_region'"), 
+                               $([ "$escaped_fqdn" = "NULL" ] && echo "NULL" || echo "'$escaped_fqdn'"),
+                               $([ "$PUB_KEY_RSA" = "NULL" ] && echo "NULL" || echo "'$escaped_pub_key_rsa'"), 
+                               $([ "$PUB_KEY_ECDSA" = "NULL" ] && echo "NULL" || echo "'$escaped_pub_key_ecdsa'"), 
+                               $([ "$PUB_KEY_ED25519" = "NULL" ] && echo "NULL" || echo "'$escaped_pub_key_ed25519'"), 
                                '$escaped_raw_data');"
             ;;
     esac
@@ -172,7 +169,7 @@ check_database() {
     log "INFO" "Checking database connectivity..."
     
     case "$DB_TYPE" in
-        "mysql")
+        "mysql")fields_to_extract
             if ! command -v mysql &> /dev/null; then
                 log "ERROR" "mysql client not found. Please install mysql-client."
                 exit 1
@@ -219,7 +216,7 @@ get_statistics() {
     local stats_sql="SELECT 
         COUNT(*) as total_events,
         COUNT(DISTINCT instance_id) as unique_instances,
-        COUNT(DISTINCT cloud_name) as cloud_providers,
+        COUNT(DISTINCT hostname) as unique_hostnames,
         MIN(timestamp) as first_event,
         MAX(timestamp) as last_event
         FROM $TABLE_NAME;"
@@ -256,7 +253,7 @@ main() {
     # Parse the data
     parse_data
     
-    log "INFO" "Parsed data - Instance: $INSTANCE_ID, Hostname: $HOSTNAME, Cloud: $CLOUD_NAME"
+    log "INFO" "Parsed data - Instance: $INSTANCE_ID, Hostname: $HOSTNAME, FQDN: $FQDN, Cloud: $CLOUD_NAME"
     
     # Check database connectivity
     check_database
@@ -307,15 +304,15 @@ Environment Variables:
 
 Examples:
   # SQLite (default)
-  DB_TYPE=sqlite ./database_logger.sh "2024-01-15T10:30:00Z|i-123|host1|1.2.3.4|10.0.1.1|aws|us-west-2"
+  DB_TYPE=sqlite ./database_logger.sh "2024-01-15T10:30:00Z|i-123|host1|host1.example.com|1.2.3.4|10.0.1.1|aws|us-west-2|us-west-2a"
   
   # MySQL
   DB_TYPE=mysql DB_HOST=localhost DB_USER=phonehome DB_PASSWORD=secret \\
-    ./database_logger.sh "2024-01-15T10:30:00Z|i-123|host1|1.2.3.4|10.0.1.1|aws|us-west-2"
+    ./database_logger.sh "2024-01-15T10:30:00Z|i-123|host1|host1.example.com|1.2.3.4|10.0.1.1|aws|us-west-2|us-west-2a"
   
   # PostgreSQL
   DB_TYPE=postgresql DB_HOST=localhost DB_PORT=5432 DB_USER=phonehome DB_PASSWORD=secret \\
-    ./database_logger.sh "2024-01-15T10:30:00Z|i-123|host1|1.2.3.4|10.0.1.1|aws|us-west-2"
+    ./database_logger.sh "2024-01-15T10:30:00Z|i-123|host1|host1.example.com|1.2.3.4|10.0.1.1|aws|us-west-2|us-west-2a"
 EOF
         exit 0
         ;;

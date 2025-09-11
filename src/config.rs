@@ -105,9 +105,11 @@ impl Default for Config {
             phone_home: PhoneHomeConfig {
                 fields_to_extract: vec![
                     "instance_id".to_string(),
-                    "public_keys".to_string(),
                     "hostname".to_string(),
                     "fqdn".to_string(),
+                    "pub_key_rsa".to_string(),
+                    "pub_key_ecdsa".to_string(),
+                    "pub_key_ed25519".to_string(),
                 ],
                 field_separator: "|".to_string(),
                 include_timestamp: true,

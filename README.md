@@ -1,12 +1,12 @@
 # PhoneHome Server
 
-A secure HTTPS server written in Rust that handles Cloud Init phone home requests with Let's Encrypt certificate support. The server processes incoming phone home data, extracts configured fields, and executes external applications with the processed data.
+A HTTPS server written in Rust that handles Cloud Init phone home requests with Let's Encrypt certificate support. The server processes incoming phone home form data (application/x-www-form-urlencoded), extracts configured fields, and executes external applications with the processed data.
 
 ## Features
 
 - **HTTPS Support**: Built-in TLS/SSL support with Let's Encrypt integration
 - **Development Mode**: Self-signed certificate support with automatic generation
-- **Cloud Init Integration**: Handles standard Cloud Init phone home POST requests
+- **Cloud Init Integration**: Handles standard Cloud Init phone home POST requests with form data
 - **Configurable Data Processing**: Extract and format specific fields from phone home data
 - **External Application Execution**: Call external scripts/programs with processed data
 - **Token-based Security**: URL token authentication for secure endpoints
@@ -206,24 +206,15 @@ LOG_LEVEL = "info"
 fields_to_extract = [               # Fields to extract from phone home data
     "instance_id",
     "hostname",
-    "public_ipv4",
-    "cloud_name"
+    "fqdn",
+    "pub_key_rsa",
+    "pub_key_ecdsa",
+    "pub_key_ed25519"
 ]
 field_separator = "|"               # Separator between fields
 include_timestamp = true            # Include timestamp as first field
 include_instance_id = true          # Include instance_id as second field
 ```
-
-### Development Mode (Cargo-Based Development Only)
-
-⚠️ **WARNING: Development mode is only available when running under cargo!**
-
-Development mode provides:
-- Self-signed certificate generation for localhost HTTPS testing
-- Automatic localhost binding for security
-- Bypasses Let's Encrypt and manual certificate configuration
-- Self-signed certificates are automatically generated when certificate files don't exist
-
 **Testing and Development:**
 
 For testing purposes, you can run the server without providing certificate files:
@@ -239,16 +230,25 @@ Certificate behavior:
 - The phone home URL format: `https://your-host:port/phone-home/your-token`
 
 ## Cloud Init Integration
+### 4. Configure Cloud Init
 
-Add the following to your Cloud Init user-data to enable phone home:
+Add the phone home configuration to your cloud-init user data:
 
 ```yaml
 #cloud-config
 phone_home:
-  url: "https://your-domain.com:8443/phone-home/your-secret-token"
+  url: "https://your-server.com:8443/phone-home/your-secret-token"
   post: all
   tries: 10
 ```
+
+Cloud-init will send form data with the following fields:
+- `instance_id` - Instance identifier
+- `hostname` - System hostname
+- `fqdn` - Fully qualified domain name
+- `pub_key_rsa` - RSA public key (if available)
+- `pub_key_ecdsa` - ECDSA public key (if available)
+- `pub_key_ed25519` - Ed25519 public key (if available)
 
 The server will receive the phone home data and process it according to your configuration.
 
@@ -256,40 +256,47 @@ The server will receive the phone home data and process it according to your con
 
 The following fields can be extracted from Cloud Init phone home data:
 
-### Basic Fields
+### Officially Supported Fields
+These are the only fields officially supported by cloud-init's phone home module:
+
 - `instance_id` - Cloud instance identifier
 - `hostname` - System hostname
 - `fqdn` - Fully qualified domain name
-- `local_hostname` - Local hostname
+- `pub_key_rsa` - RSA public key
+- `pub_key_ecdsa` - ECDSA public key
+- `pub_key_ed25519` - Ed25519 public key
 
-### Cloud Provider Information
-- `cloud_name` - Cloud provider (aws, gce, azure, etc.)
-- `platform` - Platform information
-- `region` - Cloud region
-- `availability_zone` - Availability zone
-- `instance_type` - Instance type/size
-
-### Network Information
-- `local_ipv4` - Local IPv4 address
-- `public_ipv4` - Public IPv4 address
-- `local_ipv6` - Local IPv6 address
-- `public_ipv6` - Public IPv6 address
-- `mac` - MAC address
-
-### Security
-- `public_keys` - SSH public keys (comma-separated)
-- `security_groups` - Security groups (comma-separated)
-
-### Custom Fields
-Any additional fields present in the phone home form data can be extracted by name.
+**Note**: Only the above fields are guaranteed to be sent by cloud-init. Any other fields will be ignored by cloud-init and should not be used in your configuration.
 
 ## API Endpoints
 
 ### Phone Home Endpoint
 - **URL**: `POST /phone-home/{token}`
 - **Content-Type**: `application/x-www-form-urlencoded`
-- **Description**: Receives Cloud Init phone home data
+- **Description**: Receives Cloud Init phone home form data
 - **Response**: JSON with processing status
+
+#### Cloud-Init Form Fields
+Cloud-init sends the following standard form fields:
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `instance_id` | Instance identifier | `i-1234567890abcdef0` |
+| `hostname` | System hostname | `web-server-01` |
+| `fqdn` | Fully qualified domain name | `web-server-01.example.com` |
+| `pub_key_rsa` | RSA public key | `ssh-rsa AAAAB3NzaC1yc2...` |
+| `pub_key_ecdsa` | ECDSA public key | `ecdsa-sha2-nistp256 AAAAE2...` |
+| `pub_key_ed25519` | Ed25519 public key | `ssh-ed25519 AAAAC3NzaC1...` |
+
+#### Example Request
+```http
+POST /phone-home/your-token HTTP/1.1
+Host: your-server.com:8443
+Content-Type: application/x-www-form-urlencoded
+User-Agent: Cloud-Init/25.2
+
+instance_id=i-87018aed&hostname=myhost&fqdn=myhost.internal&pub_key_rsa=ssh-rsa%20AAAAB3...&pub_key_ed25519=ssh-ed25519%20AAAAC3...
+```
 
 ### Health Check Endpoint
 - **URL**: `GET /health`
@@ -339,15 +346,19 @@ echo "$(date -Iseconds): $DATA" >> "$LOGFILE"
 DATA="$1"
 IFS='|' read -ra FIELDS <<< "$DATA"
 
+# Fields from cloud-init form data: timestamp|instance_id|hostname|fqdn|pub_key_rsa|pub_key_ecdsa|pub_key_ed25519
 TIMESTAMP="${FIELDS[0]}"
 INSTANCE_ID="${FIELDS[1]}"
 HOSTNAME="${FIELDS[2]}"
-PUBLIC_IP="${FIELDS[3]}"
+FQDN="${FIELDS[3]}"
+PUB_KEY_RSA="${FIELDS[4]}"
+PUB_KEY_ECDSA="${FIELDS[5]}"
+PUB_KEY_ED25519="${FIELDS[6]}"
 
 # Insert into database
 mysql -u phonehome -p"$DB_PASSWORD" phonehome_db << EOF
-INSERT INTO instances (timestamp, instance_id, hostname, public_ip)
-VALUES ('$TIMESTAMP', '$INSTANCE_ID', '$HOSTNAME', '$PUBLIC_IP');
+INSERT INTO instances (timestamp, instance_id, hostname, fqdn, pub_key_rsa, pub_key_ecdsa, pub_key_ed25519)
+VALUES ('$TIMESTAMP', '$INSTANCE_ID', '$HOSTNAME', '$FQDN', '$PUB_KEY_RSA', '$PUB_KEY_ECDSA', '$PUB_KEY_ED25519');
 EOF
 ```
 
@@ -413,6 +424,27 @@ cargo test load_tests
 
 # Manual HTTP testing
 ./test_phone_home.sh all
+```
+
+### Cloud-Init Testing
+
+Test the server with real cloud-init requests:
+
+# Manual testing with curl
+curl -X POST \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -H "User-Agent: Cloud-Init/25.2" \
+  -d "instance_id=i-1234567890abcdef0&hostname=test-instance&fqdn=test-instance.example.com&pub_key_rsa=ssh-rsa%20AAAAB3..." \
+  "https://your-server.com:8443/phone-home/your-token"
+
+# Expected response
+{
+  "status": "success",
+  "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "instance_id": "i-1234567890abcdef0",
+  "processed_fields": 4,
+  "external_app_executed": true
+}
 ```
 
 ### RPM Packaging
