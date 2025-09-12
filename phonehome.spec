@@ -121,7 +121,7 @@ fi
 %systemd_postun_with_restart %{name}.service
 
 %files
-%license %{_docdir}/%{name}/LICENSE
+%license %{_licensedir}/%{name}/LICENSE
 %doc %{_docdir}/%{name}/README.md
 %{_bindir}/%{name}
 %{_unitdir}/%{name}.service
