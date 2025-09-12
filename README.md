@@ -93,7 +93,7 @@ Create a script to process the phone home data (if not using RPM package):
 sudo cat > /usr/local/bin/process-phone-home << 'EOF'
 #!/bin/bash
 # Simple example script to process phone home data
-DATA="$1"
+DATA="$PHONEHOME_DATA"
 echo "$(date): Received phone home data: $DATA" >> /var/log/phonehome/phone-home.log
 
 # Parse pipe-separated data
@@ -181,6 +181,8 @@ max_files = 10                                 # Number of rotated files to keep
 
 ### External Application Configuration
 
+The PhoneHome server can execute external applications when phone home data is received. The processed data is passed to the external application via the `PHONEHOME_DATA` environment variable.
+
 ```toml
 [external_app]
 command = "/usr/local/bin/process-phone-home"  # Command to execute
@@ -192,12 +194,14 @@ working_directory = "/var/lib/phonehome"       # Working directory (optional)
 max_data_length = 4096                         # Maximum data length in bytes
 allow_control_chars = false                    # Allow control characters (default: false)
 sanitize_input = true                          # Sanitize input data (default: true)
-quote_data = false                             # Encapsulate data in quotes (default: false)
+quote_data = false                             # Encapsulate data in quotes when passed via PHONEHOME_DATA env var (default: false)
 
 [external_app.environment]                     # Environment variables (optional)
 API_KEY = "your-api-key"
 LOG_LEVEL = "info"
 ```
+
+**Data Passing**: Phone home data is passed to your external application via the `PHONEHOME_DATA` environment variable. Your script can access this data using `$PHONEHOME_DATA` in shell scripts or `os.environ['PHONEHOME_DATA']` in Python scripts.
 
 ### Phone Home Data Processing
 
@@ -334,7 +338,7 @@ OPTIONS:
 
 ```bash
 #!/bin/bash
-DATA="$1"
+DATA="$PHONEHOME_DATA"
 LOGFILE="/var/log/phonehome.log"
 echo "$(date -Iseconds): $DATA" >> "$LOGFILE"
 ```
@@ -566,7 +570,7 @@ curl -X POST \
    ls -la /usr/local/bin/process-phone-home
 
    # Test external app manually
-   sudo -u phonehome /usr/local/bin/process-phone-home "test-data"
+   sudo -u phonehome PHONEHOME_DATA="test-data" /usr/local/bin/process-phone-home
 
    # Check logs
    sudo tail -f /var/log/phonehome/phone-home.log
@@ -746,7 +750,7 @@ INFO [correlation-id] Extracted data: 4 fields, formatted as: '2024-01-15T10:30:
 ```
 INFO [correlation-id] Executing external application: /usr/bin/process-phone-home
 DEBUG [correlation-id] Command args: ["--source", "cloud-init"]
-DEBUG [correlation-id] Data to pass: '2024-01-15T10:30:45Z|i-1234567890abcdef0|web-server|10.0.1.100'
+DEBUG [correlation-id] Setting PHONEHOME_DATA environment variable
 INFO [correlation-id] External application executed successfully in 245ms
 ```
 

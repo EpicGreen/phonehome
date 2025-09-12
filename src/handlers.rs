@@ -4,12 +4,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::{
-    body::Bytes,
-    extract::{ConnectInfo, Path, State},
-    http::{HeaderMap, StatusCode},
+    extract::{ConnectInfo, Form, Path, State},
     response::{IntoResponse, Json, Response},
 };
-use serde::Deserialize;
+
 use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
 use tokio::process::Command;
@@ -28,24 +26,6 @@ pub struct RateLimiter {
     requests: Arc<RwLock<HashMap<String, Vec<Instant>>>>,
     max_requests: usize,
     window_duration: Duration,
-}
-
-/// Cloud-init phone home form data structure
-/// This matches the form fields that cloud-init sends
-#[derive(Debug, Clone, Deserialize)]
-pub struct PhoneHomeFormData {
-    /// RSA public key
-    pub pub_key_rsa: Option<String>,
-    /// ECDSA public key
-    pub pub_key_ecdsa: Option<String>,
-    /// Ed25519 public key
-    pub pub_key_ed25519: Option<String>,
-    /// Instance ID
-    pub instance_id: Option<String>,
-    /// Hostname
-    pub hostname: Option<String>,
-    /// Fully qualified domain name
-    pub fqdn: Option<String>,
 }
 
 impl RateLimiter {
@@ -85,8 +65,7 @@ pub async fn phone_home_handler(
     State(state): State<AppState>,
     Path(token): Path<String>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
-    raw_body: Bytes,
+    Form(phone_home_data): Form<PhoneHomeData>,
 ) -> Response {
     // Generate correlation ID for this request
     let correlation_id = Uuid::new_v4();
@@ -95,27 +74,6 @@ pub async fn phone_home_handler(
     info!(
         "Received phone home request [{}] from {} with token: {}",
         correlation_id, client_ip, token
-    );
-
-    // Validate Content-Type header (maintain original Axum Form behavior)
-    let content_type = headers
-        .get("content-type")
-        .and_then(|ct| ct.to_str().ok())
-        .unwrap_or("");
-
-    if !content_type.starts_with("application/x-www-form-urlencoded") {
-        warn!(
-            "[{}] Unsupported media type: {}",
-            correlation_id, content_type
-        );
-        return (StatusCode::UNSUPPORTED_MEDIA_TYPE, "Unsupported Media Type").into_response();
-    }
-
-    // Log the raw request body for debugging
-    debug!(
-        "[{}] Raw request body: {}",
-        correlation_id,
-        String::from_utf8_lossy(&raw_body)
     );
 
     // Check rate limit
@@ -127,24 +85,18 @@ pub async fn phone_home_handler(
         return web::bad_request().await;
     }
 
-    // Parse the raw body as form data
-    let Ok(form_data) = parse_form_data(&raw_body, &correlation_id) else {
-        warn!("[{}] Failed to parse form data", correlation_id);
-        return web::bad_request().await;
-    };
-
     // Log incoming POST form data for debugging
     debug!(
         "[{}] Received form data - instance_id: {:?}, hostname: {:?}, fqdn: {:?}",
-        correlation_id, form_data.instance_id, form_data.hostname, form_data.fqdn
+        correlation_id, phone_home_data.instance_id, phone_home_data.hostname, phone_home_data.fqdn
     );
 
     // Log SSH keys separately with truncation for security
-    if form_data.pub_key_rsa.is_some() {
+    if phone_home_data.pub_key_rsa.is_some() {
         debug!(
             "[{}] RSA key present: {}...",
             correlation_id,
-            form_data
+            phone_home_data
                 .pub_key_rsa
                 .as_ref()
                 .unwrap()
@@ -153,11 +105,11 @@ pub async fn phone_home_handler(
                 .collect::<String>()
         );
     }
-    if form_data.pub_key_ecdsa.is_some() {
+    if phone_home_data.pub_key_ecdsa.is_some() {
         debug!(
             "[{}] ECDSA key present: {}...",
             correlation_id,
-            form_data
+            phone_home_data
                 .pub_key_ecdsa
                 .as_ref()
                 .unwrap()
@@ -166,11 +118,11 @@ pub async fn phone_home_handler(
                 .collect::<String>()
         );
     }
-    if form_data.pub_key_ed25519.is_some() {
+    if phone_home_data.pub_key_ed25519.is_some() {
         debug!(
             "[{}] Ed25519 key present: {}...",
             correlation_id,
-            form_data
+            phone_home_data
                 .pub_key_ed25519
                 .as_ref()
                 .unwrap()
@@ -181,12 +133,12 @@ pub async fn phone_home_handler(
     }
 
     // Check if all form fields are empty
-    let all_empty = form_data.instance_id.is_none()
-        && form_data.hostname.is_none()
-        && form_data.fqdn.is_none()
-        && form_data.pub_key_rsa.is_none()
-        && form_data.pub_key_ecdsa.is_none()
-        && form_data.pub_key_ed25519.is_none();
+    let all_empty = phone_home_data.instance_id.is_none()
+        && phone_home_data.hostname.is_none()
+        && phone_home_data.fqdn.is_none()
+        && phone_home_data.pub_key_rsa.is_none()
+        && phone_home_data.pub_key_ecdsa.is_none()
+        && phone_home_data.pub_key_ed25519.is_none();
 
     if all_empty {
         warn!(
@@ -206,25 +158,7 @@ pub async fn phone_home_handler(
     }
     debug!("[{}] Token authentication successful", correlation_id);
 
-    // Convert form data to PhoneHomeData structure
-    debug!(
-        "[{}] Converting form data to phone home data",
-        correlation_id
-    );
-
-    let phone_home_data = PhoneHomeData {
-        instance_id: form_data.instance_id.clone(),
-        hostname: form_data.hostname.clone(),
-        fqdn: form_data.fqdn.clone(),
-        pub_key_rsa: form_data.pub_key_rsa.clone(),
-        pub_key_ecdsa: form_data.pub_key_ecdsa.clone(),
-        pub_key_ed25519: form_data.pub_key_ed25519.clone(),
-    };
-
-    debug!(
-        "[{}] Phone home data converted successfully",
-        correlation_id
-    );
+    debug!("[{}] Phone home data received successfully", correlation_id);
 
     info!(
         "[{}] Processing phone home data for instance: {:?}",
@@ -329,57 +263,6 @@ pub async fn phone_home_handler(
     Json(response).into_response()
 }
 
-/// Parse form data from raw bytes
-fn parse_form_data(
-    raw_body: &[u8],
-    correlation_id: &Uuid,
-) -> Result<PhoneHomeFormData, Box<dyn std::error::Error + Send + Sync>> {
-    use std::str;
-
-    // Convert bytes to string
-    let body_str = str::from_utf8(raw_body).inspect_err(|e| {
-        warn!("[{}] Invalid UTF-8 in request body: {}", correlation_id, e);
-    })?;
-
-    // Parse URL-encoded form data manually
-    let mut form_data = PhoneHomeFormData {
-        pub_key_rsa: None,
-        pub_key_ecdsa: None,
-        pub_key_ed25519: None,
-        instance_id: None,
-        hostname: None,
-        fqdn: None,
-    };
-
-    // Split by & to get key-value pairs
-    for pair in body_str.split('&') {
-        if let Some((key, value)) = pair.split_once('=') {
-            // URL decode the value
-            let decoded_value = urlencoding::decode(value).map_err(|e| {
-                warn!(
-                    "[{}] Failed to URL decode value for key '{}': {}",
-                    correlation_id, key, e
-                );
-                e
-            })?;
-
-            match key {
-                "pub_key_rsa" => form_data.pub_key_rsa = Some(decoded_value.to_string()),
-                "pub_key_ecdsa" => form_data.pub_key_ecdsa = Some(decoded_value.to_string()),
-                "pub_key_ed25519" => form_data.pub_key_ed25519 = Some(decoded_value.to_string()),
-                "instance_id" => form_data.instance_id = Some(decoded_value.to_string()),
-                "hostname" => form_data.hostname = Some(decoded_value.to_string()),
-                "fqdn" => form_data.fqdn = Some(decoded_value.to_string()),
-                _ => {
-                    debug!("[{}] Unknown form field: {}", correlation_id, key);
-                }
-            }
-        }
-    }
-
-    Ok(form_data)
-}
-
 /// Sanitize and validate data before passing to external application
 fn sanitize_external_app_data(
     data: &str,
@@ -477,9 +360,8 @@ async fn execute_external_app(
         cmd.arg(arg);
     }
 
-    // SECURITY: Use sanitized data with optional quoting
-    // Rust's arg() method handles argument separation safely
-    let data_arg = if config.quote_data {
+    // SECURITY: Pass sanitized data as environment variable instead of command argument
+    let data_value = if config.quote_data {
         format!("\"{sanitized_data}\"")
     } else {
         sanitized_data.to_string()
@@ -488,7 +370,11 @@ async fn execute_external_app(
         "[{}] Quote data enabled: {}",
         correlation_id, config.quote_data
     );
-    cmd.arg(&data_arg);
+    cmd.env("PHONEHOME_DATA", &data_value);
+    debug!(
+        "[{}] Setting PHONEHOME_DATA environment variable",
+        correlation_id
+    );
 
     // Set working directory if configured
     if let Some(ref working_dir) = config.working_directory {
@@ -661,8 +547,11 @@ mod tests {
     #[tokio::test]
     async fn test_execute_external_app_success() {
         let config = ExternalAppConfig {
-            command: "echo".to_string(),
-            args: vec!["Processing:".to_string()],
+            command: "sh".to_string(),
+            args: vec![
+                "-c".to_string(),
+                "echo Processing: $PHONEHOME_DATA".to_string(),
+            ],
             timeout_seconds: 5,
             working_directory: None,
             environment: None,
@@ -676,6 +565,7 @@ mod tests {
         let result = execute_external_app(&config, "test-data", &correlation_id).await;
         assert!(result.is_ok());
         let output = result.unwrap();
+        assert!(output.contains("test-data"));
         assert!(output.contains("Processing: test-data"));
     }
 
@@ -686,7 +576,10 @@ mod tests {
 
         let config = ExternalAppConfig {
             command: "sh".to_string(),
-            args: vec!["-c".to_string(), "echo $TEST_VAR".to_string()],
+            args: vec![
+                "-c".to_string(),
+                "echo $TEST_VAR $PHONEHOME_DATA".to_string(),
+            ],
             timeout_seconds: 5,
             working_directory: None,
             environment: Some(env_vars),
@@ -697,10 +590,11 @@ mod tests {
         };
 
         let correlation_id = Uuid::new_v4();
-        let result = execute_external_app(&config, "ignored", &correlation_id).await;
+        let result = execute_external_app(&config, "test-phonehome-data", &correlation_id).await;
         assert!(result.is_ok());
         let output = result.unwrap();
-        assert!(output.trim() == "test_value");
+        assert!(output.contains("test_value")); // From TEST_VAR
+        assert!(output.contains("test-phonehome-data")); // From PHONEHOME_DATA
     }
 
     #[tokio::test]
@@ -783,8 +677,8 @@ mod tests {
     async fn test_quote_data_with_execution() {
         // Test with quote_data = true
         let config_with_quotes = ExternalAppConfig {
-            command: "echo".to_string(),
-            args: vec!["Data:".to_string()],
+            command: "sh".to_string(),
+            args: vec!["-c".to_string(), "echo $PHONEHOME_DATA".to_string()],
             timeout_seconds: 5,
             working_directory: None,
             environment: None,
@@ -805,8 +699,8 @@ mod tests {
 
         // Test with quote_data = false
         let config_without_quotes = ExternalAppConfig {
-            command: "echo".to_string(),
-            args: vec!["Data:".to_string()],
+            command: "sh".to_string(),
+            args: vec!["-c".to_string(), "echo $PHONEHOME_DATA".to_string()],
             timeout_seconds: 5,
             working_directory: None,
             environment: None,

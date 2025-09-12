@@ -905,7 +905,7 @@ mod web_tests {
             .await
             .unwrap();
 
-        // Axum returns 415 for unsupported media type (expecting form data, got JSON)
+        // Axum Form extractor returns 415 for unsupported media type (expecting form data, got JSON)
         assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
 
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
@@ -913,8 +913,9 @@ mod web_tests {
             .unwrap();
         let body_str = String::from_utf8(body.to_vec()).unwrap();
 
-        // This will be Axum's default unsupported media type error message
-        assert!(body_str.contains("Unsupported Media Type"));
+        // Axum's Form extractor returns this specific message for wrong content type
+        assert!(body_str
+            .contains("Form requests must have `Content-Type: application/x-www-form-urlencoded`"));
     }
 
     #[tokio::test]
