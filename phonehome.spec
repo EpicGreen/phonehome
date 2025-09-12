@@ -59,29 +59,29 @@ cargo build --release --verbose
 
 %install
 cd %{name}-%{version}
-install -d %{buildroot}%{_bindir}                                   # /usr/bin
-install -d %{buildroot}%{_sysconfdir}/%{name}                       # /etc/phonehome
-install -d %{buildroot}%{_localstatedir}/lib/%{name}                # /var/lib/phonehome
-install -d %{buildroot}%{_localstatedir}/log/%{name}                # /var/log/phonehome
-install -d %{buildroot}%{_unitdir}/                                 # /usr/lib/systemd/system/
-install -d %{buildroot}%{_datadir}/bash-completion/completions      # /usr/share/bash-completion/completions
-install -d %{buildroot}%{_docdir}/%{name}                           # /usr/share/doc/phonehome
 
 # Install main binary to /usr/bin
+install -d %{buildroot}%{_bindir}
 install -m 0755 target/release/%{name} %{buildroot}%{_bindir}/%{name}
 
 # Install configuration file to /etc/phonehome
+install -d %{buildroot}%{_sysconfdir}/%{name}
 install -m 0640 etc/phonehome/config.toml %{buildroot}%{_sysconfdir}/phonehome/config.toml
 
 # Install systemd service file to /usr/lib/systemd/system
+install -d %{buildroot}%{_unitdir}/
 install -m 0644 usr/lib/systemd/system/%{name}.service %{buildroot}%{_unitdir}/%{name}.service
 
 # Install bash completion to /usr/share/bash-completion/completions
+install -d %{buildroot}%{_datadir}/bash-completion/completions
 install -m 0644 etc/bash-completion/phonehome %{buildroot}%{_datadir}/bash-completion/completions/phonehome
 
 # Install documentation
+install -d %{buildroot}%{_docdir}/%{name}
 install -m 644 README.md %{buildroot}%{_docdir}/%{name}/
-install -m 644 LICENSE %{buildroot}%{_docdir}/%{name}/
+
+install -d %{buildroot}%{_licensedir}/%{name}
+install -m 644 LICENSE %{buildroot}%{_licensedir}/%{name}/LICENSE
 
 # Install configuration directory and example config
 install -d %{buildroot}%{_sysconfdir}/%{name}
