@@ -42,18 +42,19 @@ cert_path = "/var/lib/phonehome/cert.pem"
 # If the file doesn't exist, a private key will be generated automatically
 key_path = "/var/lib/phonehome/key.pem"
 
-# For testing without TLS (HTTP mode), comment out the entire [tls] section:
-# [tls]
-# cert_path = "/var/lib/phonehome/cert.pem"
-# key_path = "/var/lib/phonehome/key.pem"
+# Note: TLS is required for operation. The server will not start without TLS certificates.
+# If the certificate files don't exist, self-signed certificates will be generated automatically.
 
 [external_app]
 # Command to execute when phone home data is received
 # This could be a script, binary, or any executable command
 command = "/usr/bin/process-phone-home"
 
-# Arguments to pass to the command (the processed data string will be appended at the end)
-args = ["--source", "cloud-init", "--format", "pipe-separated"]
+# Arguments to pass to the command
+# Use ${PhoneHomeData} placeholder in any argument to substitute the sanitized phone home data
+# Example: ["--input", "${PhoneHomeData}"] or ["--data", "${PhoneHomeData}", "--format", "json"]
+# The ${PhoneHomeData} placeholder will be replaced with the actual processed data string
+args = ["--source", "cloud-init", "--format", "pipe-separated", "--data" , "${PhoneHomeData}"]
 
 # Timeout in seconds for the external application execution
 timeout_seconds = 30
@@ -83,13 +84,13 @@ quote_data = true
 [phone_home]
 # List of fields to extract from the Cloud Init phone home form data
 # Available fields include only those officially supported by cloud-init:
-# 
+#
 # Cloud-Init Standard Fields:
 # - instance_id: Cloud instance identifier
-# - hostname: System hostname  
+# - hostname: System hostname
 # - fqdn: Fully qualified domain name
 # - pub_key_rsa: RSA public key
-# - pub_key_ecdsa: ECDSA public key 
+# - pub_key_ecdsa: ECDSA public key
 # - pub_key_ed25519: Ed25519 public key
 #
 # Note: Only the above fields are officially supported by cloud-init phone home module.

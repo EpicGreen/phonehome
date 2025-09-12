@@ -224,7 +224,8 @@ impl Config {
                 tls.cert_path, tls.key_path
             );
         } else {
-            debug!("TLS disabled - server will run in HTTP mode");
+            error!("No TLS configuration found - HTTPS is required for operation");
+            anyhow::bail!("TLS configuration is required - server operates in HTTPS-only mode");
         }
 
         // Validate external app configuration
@@ -329,15 +330,14 @@ impl Config {
     }
 
     pub fn get_phone_home_url(&self) -> String {
-        let use_https = self.tls.is_some();
-        let scheme = if use_https { "https" } else { "http" };
+        // Server operates in HTTPS-only mode
         let url = format!(
-            "{}://{}:{}/phone-home/{}",
-            scheme, self.server.host, self.server.port, self.server.token
+            "https://{}:{}/phone-home/{}",
+            self.server.host, self.server.port, self.server.token
         );
 
         debug!("Generated phone home URL: {}", url);
-        info!("Phone home URL generated with {} protocol", scheme);
+        info!("Phone home URL generated with HTTPS protocol");
 
         url
     }

@@ -355,12 +355,7 @@ async fn execute_external_app(
 
     let mut cmd = Command::new(&config.command);
 
-    // Add configured arguments
-    for arg in &config.args {
-        cmd.arg(arg);
-    }
-
-    // SECURITY: Pass sanitized data as environment variable instead of command argument
+    // Prepare sanitized data value with quoting if needed
     let data_value = if config.quote_data {
         format!("\"{sanitized_data}\"")
     } else {
@@ -370,11 +365,21 @@ async fn execute_external_app(
         "[{}] Quote data enabled: {}",
         correlation_id, config.quote_data
     );
-    cmd.env("PHONEHOME_DATA", &data_value);
-    debug!(
-        "[{}] Setting PHONEHOME_DATA environment variable",
-        correlation_id
-    );
+
+    // Add configured arguments, replacing ${PhoneHomeData} placeholder with sanitized data
+    for arg in &config.args {
+        let processed_arg = if arg.contains("${PhoneHomeData}") {
+            let replaced_arg = arg.replace("${PhoneHomeData}", &data_value);
+            debug!(
+                "[{}] Replaced placeholder in argument: '{}' -> '{}'",
+                correlation_id, arg, replaced_arg
+            );
+            replaced_arg
+        } else {
+            arg.clone()
+        };
+        cmd.arg(processed_arg);
+    }
 
     // Set working directory if configured
     if let Some(ref working_dir) = config.working_directory {
@@ -550,7 +555,7 @@ mod tests {
             command: "sh".to_string(),
             args: vec![
                 "-c".to_string(),
-                "echo Processing: $PHONEHOME_DATA".to_string(),
+                "echo Processing: ${PhoneHomeData}".to_string(),
             ],
             timeout_seconds: 5,
             working_directory: None,
@@ -578,7 +583,7 @@ mod tests {
             command: "sh".to_string(),
             args: vec![
                 "-c".to_string(),
-                "echo $TEST_VAR $PHONEHOME_DATA".to_string(),
+                "echo $TEST_VAR ${PhoneHomeData}".to_string(),
             ],
             timeout_seconds: 5,
             working_directory: None,
@@ -594,7 +599,7 @@ mod tests {
         assert!(result.is_ok());
         let output = result.unwrap();
         assert!(output.contains("test_value")); // From TEST_VAR
-        assert!(output.contains("test-phonehome-data")); // From PHONEHOME_DATA
+        assert!(output.contains("test-phonehome-data")); // From ${PhoneHomeData}
     }
 
     #[tokio::test]
@@ -677,8 +682,8 @@ mod tests {
     async fn test_quote_data_with_execution() {
         // Test with quote_data = true
         let config_with_quotes = ExternalAppConfig {
-            command: "sh".to_string(),
-            args: vec!["-c".to_string(), "echo $PHONEHOME_DATA".to_string()],
+            command: "echo".to_string(),
+            args: vec!["${PhoneHomeData}".to_string()],
             timeout_seconds: 5,
             working_directory: None,
             environment: None,
@@ -699,8 +704,8 @@ mod tests {
 
         // Test with quote_data = false
         let config_without_quotes = ExternalAppConfig {
-            command: "sh".to_string(),
-            args: vec!["-c".to_string(), "echo $PHONEHOME_DATA".to_string()],
+            command: "echo".to_string(),
+            args: vec!["${PhoneHomeData}".to_string()],
             timeout_seconds: 5,
             working_directory: None,
             environment: None,
@@ -710,11 +715,157 @@ mod tests {
             quote_data: false,
         };
 
+        let correlation_id = Uuid::new_v4();
+        let test_data = "test|data|with|pipes";
+
         let result = execute_external_app(&config_without_quotes, test_data, &correlation_id).await;
         assert!(result.is_ok());
         let output = result.unwrap();
         // Without quotes, the output should contain the unquoted data
         assert!(output.contains("test|data|with|pipes"));
         assert!(!output.contains("\"test|data|with|pipes\""));
+    }
+
+    #[tokio::test]
+    async fn test_data_placeholder_replacement() {
+        // Test ${PhoneHomeData} placeholder replacement in arguments
+        let config = ExternalAppConfig {
+            command: "sh".to_string(),
+            args: vec![
+                "-c".to_string(),
+                "echo 'Received: ${PhoneHomeData}'".to_string(),
+            ],
+            timeout_seconds: 5,
+            working_directory: None,
+            environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
+        };
+
+        let correlation_id = Uuid::new_v4();
+        let test_data = "instance123|hostname.example.com";
+
+        let result = execute_external_app(&config, test_data, &correlation_id).await;
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.contains("Received: instance123|hostname.example.com"));
+        assert!(!output.contains("${PhoneHomeData}")); // Placeholder should be replaced
+    }
+
+    #[tokio::test]
+    async fn test_data_placeholder_with_quotes() {
+        // Test ${PhoneHomeData} placeholder replacement with quote_data = true
+        let config = ExternalAppConfig {
+            command: "sh".to_string(),
+            args: vec![
+                "-c".to_string(),
+                "echo 'Data: ${PhoneHomeData}'".to_string(),
+            ],
+            timeout_seconds: 5,
+            working_directory: None,
+            environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: true,
+        };
+
+        let correlation_id = Uuid::new_v4();
+        let test_data = "test data with spaces";
+
+        let result = execute_external_app(&config, test_data, &correlation_id).await;
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.contains("Data: \"test data with spaces\""));
+        assert!(!output.contains("${PhoneHomeData}")); // Placeholder should be replaced
+    }
+
+    #[tokio::test]
+    async fn test_multiple_data_placeholders() {
+        // Test multiple ${PhoneHomeData} placeholders in different arguments
+        let config = ExternalAppConfig {
+            command: "sh".to_string(),
+            args: vec![
+                "-c".to_string(),
+                "echo 'First: ${PhoneHomeData}' && echo 'Second: ${PhoneHomeData}'".to_string(),
+            ],
+            timeout_seconds: 5,
+            working_directory: None,
+            environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
+        };
+
+        let correlation_id = Uuid::new_v4();
+        let test_data = "duplicate-test";
+
+        let result = execute_external_app(&config, test_data, &correlation_id).await;
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.contains("First: duplicate-test"));
+        assert!(output.contains("Second: duplicate-test"));
+        assert!(!output.contains("${PhoneHomeData}")); // All placeholders should be replaced
+    }
+
+    #[tokio::test]
+    async fn test_args_without_placeholder() {
+        // Test that arguments without ${PhoneHomeData} placeholder work normally
+        let config = ExternalAppConfig {
+            command: "sh".to_string(),
+            args: vec!["-c".to_string(), "echo 'No placeholder here'".to_string()],
+            timeout_seconds: 5,
+            working_directory: None,
+            environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
+        };
+
+        let correlation_id = Uuid::new_v4();
+        let test_data = "test|data|with|pipes";
+
+        let result = execute_external_app(&config, test_data, &correlation_id).await;
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.contains("No placeholder here"));
+    }
+
+    #[tokio::test]
+    async fn test_no_environment_variables_set() {
+        // Test that no environment variables are set for the external app
+        let config = ExternalAppConfig {
+            command: "sh".to_string(),
+            args: vec![
+                "-c".to_string(),
+                "echo \"PHONEHOME_DATA=$PHONEHOME_DATA\" && echo \"DATA=$DATA\"".to_string(),
+            ],
+            timeout_seconds: 5,
+            working_directory: None,
+            environment: None,
+            max_data_length: 4096,
+            allow_control_chars: false,
+            sanitize_input: true,
+            quote_data: false,
+        };
+
+        let correlation_id = Uuid::new_v4();
+        let test_data = "test-data-123";
+
+        let result = execute_external_app(&config, test_data, &correlation_id).await;
+        assert!(result.is_ok());
+        let output = result.unwrap();
+
+        // Verify that no PHONEHOME_DATA environment variable is set
+        assert!(output.contains("PHONEHOME_DATA="));
+        assert!(!output.contains("PHONEHOME_DATA=test-data-123"));
+
+        // Verify that no DATA environment variable is set
+        assert!(output.contains("DATA="));
+        assert!(!output.contains("DATA=test-data-123"));
     }
 }

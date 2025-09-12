@@ -53,7 +53,10 @@ fn create_test_config() -> Config {
             max_file_size_mb: 10,
             max_files: 3,
         },
-        tls: None, // Disable TLS for tests
+        tls: Some(TlsConfig {
+            cert_path: "/tmp/test-cert.pem".into(),
+            key_path: "/tmp/test-key.pem".into(),
+        }), // TLS is required for HTTPS-only operation
         external_app: ExternalAppConfig {
             command: "echo".to_string(),
             args: vec!["test-processed:".to_string()],
@@ -132,6 +135,10 @@ enable_file = false
 max_file_size_mb = 10
 max_files = 3
 
+[tls]
+cert_path = "/tmp/test-cert.pem"
+key_path = "/tmp/test-key.pem"
+
 [external_app]
 command = "/bin/echo"
 args = ["test"]
@@ -167,15 +174,19 @@ include_instance_id = false
     fn test_phone_home_url_generation() {
         let config = create_test_config();
         let url = config.get_phone_home_url();
-        assert_eq!(url, "http://127.0.0.1:8444/phone-home/test-token-123");
+        // Server operates in HTTPS-only mode
+        assert_eq!(url, "https://127.0.0.1:8444/phone-home/test-token-123");
 
-        let mut config_with_tls = config;
-        config_with_tls.tls = Some(TlsConfig {
-            cert_path: "/tmp/cert.pem".into(),
-            key_path: "/tmp/key.pem".into(),
+        let mut config_with_custom_tls = config;
+        config_with_custom_tls.tls = Some(TlsConfig {
+            cert_path: "/custom/cert.pem".into(),
+            key_path: "/custom/key.pem".into(),
         });
-        let url_tls = config_with_tls.get_phone_home_url();
-        assert_eq!(url_tls, "https://127.0.0.1:8444/phone-home/test-token-123");
+        let url_custom = config_with_custom_tls.get_phone_home_url();
+        assert_eq!(
+            url_custom,
+            "https://127.0.0.1:8444/phone-home/test-token-123"
+        );
     }
 }
 

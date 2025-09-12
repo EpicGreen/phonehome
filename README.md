@@ -1,20 +1,18 @@
 # PhoneHome Server
 
-A HTTPS server written in Rust that handles Cloud Init phone home requests with Let's Encrypt certificate support. The server processes incoming phone home form data (application/x-www-form-urlencoded), extracts configured fields, and executes external applications with the processed data.
+A secure, lightweight HTTPS server designed to receive and process phone home data from cloud-init instances. This server provides a simple API endpoint for cloud instances to report their initialization status and system information over TLS-encrypted connections.
 
 ## Features
 
-- **HTTPS Support**: Built-in TLS/SSL support with Let's Encrypt integration
-- **Development Mode**: Self-signed certificate support with automatic generation
-- **Cloud Init Integration**: Handles standard Cloud Init phone home POST requests with form data
-- **Configurable Data Processing**: Extract and format specific fields from phone home data
-- **External Application Execution**: Call external scripts/programs with processed data
-- **Token-based Security**: URL token authentication for secure endpoints
-- **TOML Configuration**: Easy-to-use configuration file format
-- **Comprehensive Logging**: Detailed logging with file output and logrotate support
-- **Web Interface**: Landing page and custom error pages for better user experience
-- **Health Check Endpoint**: Built-in health monitoring
-- **Request Correlation**: Unique IDs for tracking requests through the system
+- **Secure HTTPS-only server** with automatic self-signed certificate generation
+- **Cloud-init integration** via standard phone home module
+- **External application execution** with configurable data processing
+- **Rate limiting** to prevent abuse
+- **Comprehensive logging** with request correlation tracking
+- **Data sanitization** and security controls
+- **Flexible configuration** via TOML files
+- **RPM packaging** for easy deployment
+- **Web interface** for status monitoring
 
 ## Quick Start
 
@@ -28,72 +26,57 @@ cargo build --release
 
 ### 2. Configure the Server
 
-Copy the example configuration and modify it:
+Copy the example configuration and modify it for your environment:
 
 ```bash
-cp etc/phonehome/config.toml config.toml
-# Edit config.toml with your settings
+sudo mkdir -p /etc/phonehome
+sudo cp etc/phonehome/config.toml /etc/phonehome/
+sudo vim /etc/phonehome/config.toml
 ```
 
 ### 3. Install via RPM (Recommended)
 
-For production deployment, use the RPM package:
-
 ```bash
-# Install from COPR repository
-sudo dnf copr enable antedebaas/phonehome
-sudo dnf install phonehome
+# Build RPM package
+cargo install cargo-generate-rpm
+cargo generate-rpm
 
-# Or build from source
-cargo build --release
-sudo cp target/release/phonehome /usr/local/bin/
+# Install the package
+sudo dnf install target/generate-rpm/phonehome-*.rpm
 ```
 
-### 4. Configure Logging (Optional)
-
-The server includes comprehensive logging with both console and file output:
+### 4. Configure Logging
 
 ```bash
-# Logs are written to /var/log/phonehome/phonehome.log by default
 sudo mkdir -p /var/log/phonehome
 sudo chown phonehome:phonehome /var/log/phonehome
-
-# Set up log rotation
-sudo cp etc/logrotate.d/phonehome /etc/logrotate.d/
 ```
 
 ### 5. Set Up TLS Certificates
 
-The server will automatically generate self-signed certificates if none are provided. For production use, provide your own certificates:
+The server requires TLS certificates and will automatically generate self-signed certificates if none are provided:
 
 ```bash
-# Option 1: Use Let's Encrypt with certbot
-sudo dnf install certbot  # Fedora/RHEL/CentOS
-# or
-sudo apt install certbot  # Ubuntu/Debian
+# Self-signed certificates will be automatically created in:
+# /var/lib/phonehome/cert.pem
+# /var/lib/phonehome/key.pem
 
-sudo certbot certonly --standalone -d your-domain.com
-
-# Update config.toml with certificate paths:
-# cert_path = "/etc/letsencrypt/live/your-domain.com/fullchain.pem"
-# key_path = "/etc/letsencrypt/live/your-domain.com/privkey.pem"
-
-# Option 2: Use your own certificates
-# Simply place your certificate and private key files and update config.toml
-
-# Option 3: Let the server generate self-signed certificates (testing only)
-# Leave cert_path and key_path pointing to non-existent files
+# For production, provide your own certificates by updating config.toml:
+# cert_path = "/path/to/your/cert.pem"  
+# key_path = "/path/to/your/key.pem"
 ```
 
-### 5. Create an External Application
+**Note**: The server operates in HTTPS-only mode. Self-signed certificates are suitable for internal networks, but production deployments should use certificates from a trusted CA.
 
-Create a script to process the phone home data (if not using RPM package):
+### 6. Create an External Application
+
+Create a simple processor for the phone home data:
 
 ```bash
 sudo cat > /usr/local/bin/process-phone-home << 'EOF'
 #!/bin/bash
-# Simple example script to process phone home data
-DATA="$PHONEHOME_DATA"
+# Data is passed as the first argument via ${PhoneHomeData} placeholder
+DATA="$1"
 echo "$(date): Received phone home data: $DATA" >> /var/log/phonehome/phone-home.log
 
 # Parse pipe-separated data
@@ -104,89 +87,80 @@ EOF
 sudo chmod +x /usr/local/bin/process-phone-home
 ```
 
-**Note:** The RPM package includes a default external application script.
+### 7. Run the Server
 
-### 6. Run the Server
-
-**Development (from source):**
 ```bash
-# Run with default config
-./target/release/phonehome
+# Via systemd (if installed via RPM)
+sudo systemctl enable phonehome
+sudo systemctl start phonehome
 
-# Run with custom config and debug logging
-./target/release/phonehome --config /path/to/config.toml --debug
-
-# Run on specific port
-./target/release/phonehome --port 9443
+# Or run directly
+sudo /usr/local/bin/phonehome --config /etc/phonehome/config.toml
 ```
 
-**Production (RPM installation):**
+### 8. Test the Setup
+
 ```bash
-# Start the service
-sudo systemctl start phonehome
-sudo systemctl enable phonehome
+# Check server status
+curl -k https://localhost:443/health
 
-# Check status
-sudo systemctl status phonehome
-
-# View logs
-sudo journalctl -u phonehome -f
+# Test phone home endpoint (replace YOUR_TOKEN with actual token)
+curl -k -X POST -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "instance_id=i-1234567890&hostname=test-host&fqdn=test-host.example.com" \
+  https://localhost:443/phone-home/YOUR_TOKEN
 ```
 
 ## Web Interface
 
-The PhoneHome server includes a web interface for better user experience:
+The server provides a simple web interface accessible at the root URL:
 
-- **Landing Page** (`GET /`): Server information and usage instructions
-- **Health Check** (`GET /health`): Service status for monitoring
-- **Phone Home** (`POST /phone-home/{token}`): Data submission endpoint
-- **Error Pages**: Custom 404, 401, 400, and 500 error pages
-
-Visit `https://your-server.com:8443/` in a browser to see the landing page.
+- **Status page**: Shows server information and configuration
+- **Health endpoint**: `/health` - Returns server status
+- **Phone home endpoint**: `/phone-home/{token}` - Receives cloud-init data
 
 ## Configuration
 
-The server uses a TOML configuration file with the following sections:
+Configuration is managed via a TOML file (default: `/etc/phonehome/config.toml`).
 
 ### Server Configuration
 
 ```toml
 [server]
-host = "0.0.0.0"                    # Bind address
-port = 8443                         # HTTPS port
-token = "your-secret-token"         # URL authentication token
+host = "0.0.0.0"           # Bind address (0.0.0.0 for all interfaces)
+port = 443                 # Port to listen on
+token = "your-secret-token-here"  # Authentication token for phone home requests
 ```
 
 ### TLS Configuration
 
 ```toml
 [tls]
-cert_path = "/path/to/cert.pem"     # Certificate file (will be auto-generated if missing)
-key_path = "/path/to/key.pem"       # Private key file (will be auto-generated if missing)
+cert_path = "/var/lib/phonehome/cert.pem"  # TLS certificate file
+key_path = "/var/lib/phonehome/key.pem"    # TLS private key file
 ```
+
+**Note**: The server requires TLS certificates to operate. If the specified certificate files don't exist, the server will automatically generate self-signed certificates for immediate use.
 
 ### Logging Configuration
 
 ```toml
 [logging]
-log_file = "/var/log/phonehome/phonehome.log"  # Path to log file
-log_level = "info"                             # Log level: trace, debug, info, warn, error
+log_file = "/var/log/phonehome/phonehome.log"  # Log file path
+log_level = "info"                             # Log level (trace, debug, info, warn, error)
 enable_console = true                          # Enable console output
-enable_file = true                             # Enable file output
-max_file_size_mb = 100                         # Max file size before rotation
-max_files = 10                                 # Number of rotated files to keep
+enable_file = true                             # Enable file logging
+max_file_size_mb = 100                        # Maximum log file size before rotation
+max_files = 10                                # Number of rotated log files to keep
 ```
-
-**Default Certificate Paths**: Self-signed certificates are now stored in `/var/lib/phonehome/` instead of `/etc/phonehome/` for better security and permissions.
 
 ### External Application Configuration
 
-The PhoneHome server can execute external applications when phone home data is received. The processed data is passed to the external application via the `PHONEHOME_DATA` environment variable.
+The server can execute external applications when phone home data is received. Data is passed via the `${PhoneHomeData}` placeholder in arguments.
 
 ```toml
 [external_app]
 command = "/usr/local/bin/process-phone-home"  # Command to execute
-args = ["--format", "pipe"]                    # Command arguments
+args = ["${PhoneHomeData}"]                    # Arguments (${PhoneHomeData} will be replaced)
 timeout_seconds = 30                           # Execution timeout
 working_directory = "/var/lib/phonehome"       # Working directory (optional)
 
@@ -194,176 +168,163 @@ working_directory = "/var/lib/phonehome"       # Working directory (optional)
 max_data_length = 4096                         # Maximum data length in bytes
 allow_control_chars = false                    # Allow control characters (default: false)
 sanitize_input = true                          # Sanitize input data (default: true)
-quote_data = false                             # Encapsulate data in quotes when passed via PHONEHOME_DATA env var (default: false)
+quote_data = false                             # Quote data when using ${PhoneHomeData} (default: false)
 
-[external_app.environment]                     # Environment variables (optional)
+# Environment variables for the external application (optional)
+[external_app.environment]
 API_KEY = "your-api-key"
 LOG_LEVEL = "info"
 ```
 
-**Data Passing**: Phone home data is passed to your external application via the `PHONEHOME_DATA` environment variable. Your script can access this data using `$PHONEHOME_DATA` in shell scripts or `os.environ['PHONEHOME_DATA']` in Python scripts.
+**Data Passing**: Phone home data is passed to your external application via the `${PhoneHomeData}` placeholder in the arguments configuration. Your application receives this data as command line arguments.
 
 ### Phone Home Data Processing
 
 ```toml
 [phone_home]
-fields_to_extract = [               # Fields to extract from phone home data
+# Fields to extract from cloud-init form data
+fields_to_extract = [
     "instance_id",
-    "hostname",
+    "hostname", 
     "fqdn",
     "pub_key_rsa",
     "pub_key_ecdsa",
     "pub_key_ed25519"
 ]
-field_separator = "|"               # Separator between fields
-include_timestamp = true            # Include timestamp as first field
-include_instance_id = true          # Include instance_id as second field
+field_separator = "|"                          # Separator between fields
+include_timestamp = true                       # Include timestamp as first field
+include_instance_id = true                     # Include instance_id separately
 ```
-**Testing and Development:**
-
-For testing purposes, you can run the server without providing certificate files:
-```bash
-cargo run -- --debug
-```
-
-Certificate behavior:
-- If certificate files exist, they will be validated and used
-- If certificate files don't exist, self-signed certificates are automatically generated
-- Self-signed certificates should only be used for testing or internal use
-- Generated certificates use "localhost" as the domain name
-- The phone home URL format: `https://your-host:port/phone-home/your-token`
 
 ## Cloud Init Integration
-### 4. Configure Cloud Init
 
-Add the phone home configuration to your cloud-init user data:
+To integrate with cloud-init, add the phone home configuration to your cloud-init config:
+
+### Cloud-Init Configuration
 
 ```yaml
 #cloud-config
 phone_home:
-  url: "https://your-server.com:8443/phone-home/your-secret-token"
+  url: https://your-server.com:443/phone-home/your-secret-token
   post: all
-  tries: 10
+  tries: 3
 ```
 
-Cloud-init will send form data with the following fields:
-- `instance_id` - Instance identifier
-- `hostname` - System hostname
-- `fqdn` - Fully qualified domain name
-- `pub_key_rsa` - RSA public key (if available)
-- `pub_key_ecdsa` - ECDSA public key (if available)
-- `pub_key_ed25519` - Ed25519 public key (if available)
+**Important**: The URL must use `https://` as the server only accepts TLS-encrypted connections.
 
-The server will receive the phone home data and process it according to your configuration.
+This configuration tells cloud-init to send phone home data to your server after instance initialization.
 
 ## Available Data Fields
 
-The following fields can be extracted from Cloud Init phone home data:
+The following fields can be extracted from cloud-init phone home requests:
 
-### Officially Supported Fields
-These are the only fields officially supported by cloud-init's phone home module:
+### Standard Cloud-Init Fields
 
 - `instance_id` - Cloud instance identifier
-- `hostname` - System hostname
+- `hostname` - System hostname  
 - `fqdn` - Fully qualified domain name
-- `pub_key_rsa` - RSA public key
-- `pub_key_ecdsa` - ECDSA public key
-- `pub_key_ed25519` - Ed25519 public key
-
-**Note**: Only the above fields are guaranteed to be sent by cloud-init. Any other fields will be ignored by cloud-init and should not be used in your configuration.
+- `pub_key_rsa` - RSA SSH public key
+- `pub_key_ecdsa` - ECDSA SSH public key  
+- `pub_key_ed25519` - Ed25519 SSH public key
 
 ## API Endpoints
 
 ### Phone Home Endpoint
-- **URL**: `POST /phone-home/{token}`
-- **Content-Type**: `application/x-www-form-urlencoded`
-- **Description**: Receives Cloud Init phone home form data
-- **Response**: JSON with processing status
 
-#### Cloud-Init Form Fields
-Cloud-init sends the following standard form fields:
+**POST** `/phone-home/{token}`
 
-| Field | Description | Example |
-|-------|-------------|---------|
-| `instance_id` | Instance identifier | `i-1234567890abcdef0` |
-| `hostname` | System hostname | `web-server-01` |
-| `fqdn` | Fully qualified domain name | `web-server-01.example.com` |
-| `pub_key_rsa` | RSA public key | `ssh-rsa AAAAB3NzaC1yc2...` |
-| `pub_key_ecdsa` | ECDSA public key | `ecdsa-sha2-nistp256 AAAAE2...` |
-| `pub_key_ed25519` | Ed25519 public key | `ssh-ed25519 AAAAC3NzaC1...` |
+Receives phone home data from cloud-init instances.
 
-#### Example Request
-```http
-POST /phone-home/your-token HTTP/1.1
-Host: your-server.com:8443
-Content-Type: application/x-www-form-urlencoded
-User-Agent: Cloud-Init/25.2
+#### Request Format
 
-instance_id=i-87018aed&hostname=myhost&fqdn=myhost.internal&pub_key_rsa=ssh-rsa%20AAAAB3...&pub_key_ed25519=ssh-ed25519%20AAAAC3...
+Cloud-init sends data as `application/x-www-form-urlencoded`:
+
+```
+instance_id=i-1234567890&hostname=web-server&fqdn=web-server.example.com&pub_key_rsa=ssh-rsa+AAAA...
+```
+
+#### Response
+
+```json
+{
+  "status": "success",
+  "message": "Phone home data processed successfully", 
+  "instance_id": "i-1234567890",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "processed_fields": 6,
+  "correlation_id": "550e8400-e29b-41d4-a716-446655440000"
+}
 ```
 
 ### Health Check Endpoint
-- **URL**: `GET /health`
-- **Description**: Server health status
-- **Response**: JSON with server status
+
+**GET** `/health`
+
+Returns server health status.
+
+```json
+{
+  "status": "healthy",
+  "version": "0.1.10",
+  "uptime": "2h 30m 45s"
+}
+```
 
 ## Command Line Options
 
 ```bash
 phonehome [OPTIONS]
 
-OPTIONS:
-    -c, --config <FILE>    Configuration file path [default: config.toml]
-    -p, --port <PORT>      Override port from configuration
+Options:
+    -c, --config <FILE>    Configuration file path [default: /etc/phonehome/config.toml]
     -d, --debug            Enable debug logging
+    -p, --port <PORT>      Override port from config
     -h, --help             Print help information
     -V, --version          Print version information
 ```
 
 ## Security Considerations
 
-1. **Use Strong Tokens**: Generate cryptographically secure random tokens
-2. **HTTPS Only**: Always use HTTPS in production environments
-3. **Firewall Rules**: Restrict access to the server using firewall rules
-4. **Token Rotation**: Regularly rotate authentication tokens
-5. **External App Security**: Ensure external applications are secure and validated
-6. **Log Monitoring**: Monitor logs for suspicious activity
-7. **Certificate Management**: Keep TLS certificates up to date
-8. **Development Mode**: Only available when running under cargo (development environment)
-9. **Cargo Restriction**: Development mode automatically rejected in production builds
+- **Token Authentication**: All phone home requests require a valid token
+- **Rate Limiting**: Built-in rate limiting prevents abuse
+- **Input Sanitization**: All data is sanitized before processing
+- **TLS Encryption**: All communication encrypted via HTTPS
+- **Data Length Limits**: Configurable maximum data size
+- **Correlation IDs**: All requests are tracked with unique correlation IDs
 
-## Example External Applications
+## External Application Examples
 
-### Simple Logging Script
+### Simple Logging
 
 ```bash
 #!/bin/bash
-DATA="$PHONEHOME_DATA"
+# Data is passed as first argument via ${PhoneHomeData} placeholder
+DATA="$1"
 LOGFILE="/var/log/phonehome.log"
 echo "$(date -Iseconds): $DATA" >> "$LOGFILE"
 ```
 
-### Database Insert Script
+### Database Insert
 
-```bash
-#!/bin/bash
-DATA="$1"
-IFS='|' read -ra FIELDS <<< "$DATA"
+```python
+#!/usr/bin/env python3
+import sys
+import sqlite3
+from datetime import datetime
 
-# Fields from cloud-init form data: timestamp|instance_id|hostname|fqdn|pub_key_rsa|pub_key_ecdsa|pub_key_ed25519
-TIMESTAMP="${FIELDS[0]}"
-INSTANCE_ID="${FIELDS[1]}"
-HOSTNAME="${FIELDS[2]}"
-FQDN="${FIELDS[3]}"
-PUB_KEY_RSA="${FIELDS[4]}"
-PUB_KEY_ECDSA="${FIELDS[5]}"
-PUB_KEY_ED25519="${FIELDS[6]}"
+# Data passed as first argument
+data = sys.argv[1] if len(sys.argv) > 1 else ""
+fields = data.split('|')
 
 # Insert into database
-mysql -u phonehome -p"$DB_PASSWORD" phonehome_db << EOF
-INSERT INTO instances (timestamp, instance_id, hostname, fqdn, pub_key_rsa, pub_key_ecdsa, pub_key_ed25519)
-VALUES ('$TIMESTAMP', '$INSTANCE_ID', '$HOSTNAME', '$FQDN', '$PUB_KEY_RSA', '$PUB_KEY_ECDSA', '$PUB_KEY_ED25519');
-EOF
+conn = sqlite3.connect('/var/lib/phonehome/data.db')
+cursor = conn.cursor()
+cursor.execute('''
+    INSERT INTO phone_home_events (timestamp, instance_id, hostname, fqdn)
+    VALUES (?, ?, ?, ?)
+''', (datetime.now(), fields[1], fields[2], fields[3]))
+conn.commit()
+conn.close()
 ```
 
 ### Webhook Notification
@@ -373,17 +334,25 @@ EOF
 DATA="$1"
 WEBHOOK_URL="https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
 
-curl -X POST "$WEBHOOK_URL" \
-  -H 'Content-type: application/json' \
-  --data "{\"text\":\"New instance phone home: $DATA\"}"
+curl -X POST -H 'Content-type: application/json' \
+  --data "{\"text\":\"New instance online: $DATA\"}" \
+  "$WEBHOOK_URL"
 ```
 
 ## Development
 
 ### Prerequisites
 
-- Rust 1.70 or later
+- Rust 1.70+ 
 - OpenSSL development libraries
+
+```bash
+# Fedora/RHEL/CentOS
+sudo dnf install openssl-devel
+
+# Ubuntu/Debian  
+sudo apt install libssl-dev pkg-config
+```
 
 ### Building
 
@@ -391,204 +360,144 @@ curl -X POST "$WEBHOOK_URL" \
 # Debug build
 cargo build
 
-# Release build
+# Release build  
 cargo build --release
 
-# Run tests
-cargo test
-
-# Run with logging
-RUST_LOG=debug cargo run
-
-# Run for testing (auto-generates self-signed cert if needed)
-cargo run -- --debug
-
-# Using Cargo
-cargo build             # Debug build
-cargo build --release  # Release build
-cargo test             # Run tests
-cargo run -- --debug  # Development server
+# Build with all features
+cargo build --release --all-features
 ```
 
 ### Testing
 
 ```bash
-# Run Rust test suite
+# Run all tests
 cargo test
 
-# Run with output
-cargo test -- --nocapture
+# Run specific test suites
+cargo test handlers::tests
+cargo test config::tests  
+cargo test models::tests
 
-# Test specific module
-cargo test config_tests
-cargo test integration_tests
+# Integration tests
+cargo test --test integration_tests
+
+# Load testing
+cargo test load_tests
 ```
 
 ### Code Quality
 
-This project includes automated code quality checks to ensure consistent code style and catch common issues.
-
 #### Git Hooks
 
-A pre-commit hook is automatically installed that runs:
+```bash
+# Install pre-commit hooks
+cp .githooks/pre-commit .git/hooks/
+chmod +x .git/hooks/pre-commit
+```
 
-1. **cargo clippy** - Linting and static analysis
-2. **cargo test** - Run all tests
-3. **cargo fmt** - Code formatting
-
-The hook will:
-- Run clippy with warnings treated as errors (`-D warnings`)
-- If clippy passes, run all tests (`cargo test`)
-- If tests pass, automatically run `cargo fmt` to format code
-- Add any formatted files back to the commit
-- Allow the commit to proceed only if all checks pass
-
-The pre-commit hook is located at `.git/hooks/pre-commit` and is automatically executable.
-
-**Note:** The pre-commit process will take longer now since it runs the full test suite, but this ensures that only working, tested code is committed.
-
-#### Manual Code Quality Checks
-
-You can also run code quality checks manually:
+#### Manual Checks
 
 ```bash
-# Run all quality checks manually (same as pre-commit hook):
+# Code formatting
+cargo fmt --check
+
+# Linting
 cargo clippy --all-targets --all-features -- -D warnings
-cargo test
-cargo fmt --all
 
-# Or run individual commands:
-cargo clippy --all-targets --all-features -- -D warnings  # Linting
-cargo test                                                 # Tests
-cargo fmt --all                                           # Format code
+# Security audit
+cargo audit
 
-# Check formatting without changing files
-cargo fmt --all -- --check
+# Documentation
+cargo doc --no-deps --open
 ```
 
-#### Code Quality Requirements
-
-- All clippy warnings must be resolved before committing
-- All tests must pass before committing
-- Code must be formatted according to rustfmt standards
-- New code should include appropriate tests
-- External dependencies should be justified and documented
-
-# Load testing
-cargo test load_tests
-
-# Manual HTTP testing
-./test_phone_home.sh all
-```
-
-### Cloud-Init Testing
-
-Test the server with real cloud-init requests:
-
-# Manual testing with curl
-curl -X POST \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -H "User-Agent: Cloud-Init/25.2" \
-  -d "instance_id=i-1234567890abcdef0&hostname=test-instance&fqdn=test-instance.example.com&pub_key_rsa=ssh-rsa%20AAAAB3..." \
-  "https://your-server.com:8443/phone-home/your-token"
-
-# Expected response
-{
-  "status": "success",
-  "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
-  "instance_id": "i-1234567890abcdef0",
-  "processed_fields": 4,
-  "external_app_executed": true
-}
-```
-
-### RPM Packaging
+## RPM Packaging
 
 ```bash
-# Create source package (for RPM builds)
-# Source tarballs are automatically created by GitHub Actions for releases
+# Install packaging tools
+cargo install cargo-generate-rpm
 
-# Build RPM manually (if needed)
-# 1. Download source tarball from GitHub release
-# 2. rpmbuild -ta phonehome-*.tar.gz
-# 3. sudo dnf install ~/rpmbuild/RPMS/x86_64/phonehome-*.rpm
+# Generate RPM
+cargo generate-rpm
+
+# Install package
+sudo dnf install target/generate-rpm/phonehome-*.rpm
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Development Mode Issues**
-   1. **TLS Certificate Issues**
-      ```bash
-      # Self-signed certificate warnings in browser
-      # Solution: Accept the certificate warning (testing only)
-      # Or add certificate to browser's trusted certificates for testing
+**Permission Denied Errors**
+```bash
+# Fix certificate directory permissions
+sudo mkdir -p /var/lib/phonehome
+sudo chown phonehome:phonehome /var/lib/phonehome
 
-      # Certificate file not found
-      # Solution: Provide valid certificate files or let the server auto-generate them
-      ```
+# Fix log directory permissions  
+sudo mkdir -p /var/log/phonehome
+sudo chown phonehome:phonehome /var/log/phonehome
+```
 
-   2. **Permission Issues**
-2. **Certificate Permission Issues**
-   ```bash
-   # Fix certificate permissions for phonehome user
-   sudo chown phonehome:phonehome /path/to/cert.pem /path/to/key.pem
-   sudo chmod 644 /path/to/cert.pem
-   sudo chmod 600 /path/to/key.pem
-   ```
+**Port Already in Use**
+```bash
+# Check what's using the port
+sudo ss -tlnp | grep :443
 
-3. **Service Issues**
-3. **Service Won't Start**
-   ```bash
-   # Check service status
-   sudo systemctl status phonehome
+# Use different port
+phonehome --port 8443
+```
 
-   # Check logs
-   sudo journalctl -u phonehome -n 50
+**TLS Certificate Issues**
+```bash
+# Remove invalid certificates to regenerate self-signed ones
+sudo rm /var/lib/phonehome/*.pem
+sudo systemctl restart phonehome
 
-   # Check configuration
-   sudo phonehome --config /etc/phonehome/config.toml --help
-   ```
+# Note: Server requires TLS certificates to start
+# Self-signed certificates will be automatically generated if missing
+```
 
-4. **Port Conflicts**
-4. **Port Already in Use**
-   ```bash
-   # Check what's using the port
-   sudo ss -tlnp | grep :8443
+**External Application Not Executing**
+```bash
+# Check if external app is executable
+ls -la /usr/local/bin/process-phone-home
 
-   # Change port in configuration
-   sudo nano /etc/phonehome/config.toml
+# Test external app manually (data passed as argument)  
+sudo -u phonehome /usr/local/bin/process-phone-home "test-data"
 
-   # Or use --port flag for testing
-   cargo run -- --port 9443
-   ```
+# Check logs
+sudo tail -f /var/log/phonehome/phonehome.log
+```
 
-5. **External Application Issues**
-   ```bash
-   # Check if external app is executable
-   ls -la /usr/local/bin/process-phone-home
-
-   # Test external app manually
-   sudo -u phonehome PHONEHOME_DATA="test-data" /usr/local/bin/process-phone-home
-
-   # Check logs
-   sudo tail -f /var/log/phonehome/phone-home.log
-   ```
-
-### Logging
+### Debug Mode
 
 Enable debug logging for troubleshooting:
 
 ```bash
 # Via command line
-./phonehome --debug
+phonehome --debug
 
 # Via environment variable
-RUST_LOG=debug ./phonehome
+RUST_LOG=debug phonehome
 
-# Testing with custom port
-cargo run -- --debug --port 9443
+# Via configuration file
+log_level = "debug"
+```
+
+### Logging
+
+View server logs for debugging:
+
+```bash
+# Real-time log monitoring
+sudo tail -f /var/log/phonehome/phonehome.log
+
+# Search for errors
+sudo grep -i error /var/log/phonehome/phonehome.log
+
+# Filter by correlation ID
+sudo grep "correlation-id" /var/log/phonehome/phonehome.log
 ```
 
 ## License
@@ -599,413 +508,15 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+3. Make your changes  
+4. Add tests for new functionality
+5. Ensure all tests pass
+6. Submit a pull request
 
 ## Support
 
-For issues and questions:
-1. Check the troubleshooting section
-2. Review service logs: `sudo journalctl -u phonehome`
-3. Run the test suite: `cargo test`
-4. Search existing issues on GitHub
-5. Create a new issue with detailed information
-
-## Logging System
-
-The PhoneHome server uses a comprehensive structured logging system built on the `tracing` ecosystem, providing:
-
-- **Dual output**: Console and file logging with independent configuration
-- **Log rotation**: Built-in daily rotation with logrotate compatibility
-- **Request correlation**: Unique IDs for tracking requests through the system
-- **Structured data**: Optimized format for machine parsing and analysis
-- **Performance metrics**: Execution times and resource usage tracking
-- **Security logging**: Authentication events and security-relevant operations
-
-### Logging Configuration
-
-The logging system is configured in the `[logging]` section of config.toml:
-
-```toml
-[logging]
-# Path to the log file
-log_file = "/var/log/phonehome/phonehome.log"
-
-# Log level: trace, debug, info, warn, error
-log_level = "info"
-
-# Enable console logging (stdout/stderr)
-enable_console = true
-
-# Enable file logging
-enable_file = true
-
-# Maximum log file size in MB before rotation (used by tracing-appender)
-max_file_size_mb = 100
-
-# Maximum number of rotated log files to keep
-max_files = 10
-```
-
-#### Configuration Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `log_file` | Path | `/var/log/phonehome/phonehome.log` | Full path to the log file |
-| `log_level` | String | `"info"` | Minimum log level to record |
-| `enable_console` | Boolean | `true` | Enable console output |
-| `enable_file` | Boolean | `true` | Enable file output |
-| `max_file_size_mb` | Number | 100 | Max file size before rotation |
-| `max_files` | Number | 10 | Number of rotated files to keep |
-
-#### Log Levels
-
-- **trace**: Most verbose, includes all internal operations
-- **debug**: Detailed information for debugging (enabled with `--debug` flag)
-- **info**: General operational information
-- **warn**: Warning conditions that should be monitored
-- **error**: Error conditions that need attention
-
-### Command Line Options
-
-#### Debug Mode
-
-Enable debug logging regardless of configuration:
-
-```bash
-phonehome --debug
-```
-
-This overrides the `log_level` configuration and enables maximum verbosity.
-
-#### Configuration File
-
-Specify a custom configuration file:
-
-```bash
-phonehome --config /path/to/custom/config.toml
-```
-
-### Log Formats
-
-#### Console Output
-
-Console logs use a human-readable format with colors and formatting:
-
-```
-2024-01-15T10:30:45.123456Z  INFO phonehome::main: Starting phonehome server
-2024-01-15T10:30:45.124567Z DEBUG phonehome::config: Loading configuration from: "/etc/phonehome/config.toml"
-```
-
-#### File Output
-
-File logs use a structured format optimized for parsing:
-
-```
-2024-01-15T10:30:45.123456Z  INFO phonehome::handlers: [550e8400-e29b-41d4-a716-446655440000] Received phone home request with token: abc123
-```
-
-### Request Correlation
-
-Each HTTP request receives a unique correlation ID (UUID) that appears in all related log entries:
-
-```
-INFO [550e8400-e29b-41d4-a716-446655440000] Received phone home request with token: abc123
-DEBUG [550e8400-e29b-41d4-a716-446655440000] Phone home payload: {...}
-INFO [550e8400-e29b-41d4-a716-446655440000] External application executed successfully
-```
-
-This allows you to trace a complete request through the system using tools like `grep`:
-
-```bash
-grep "550e8400-e29b-41d4-a716-446655440000" /var/log/phonehome/phonehome.log
-```
-
-### Log Categories
-
-#### Startup and Configuration
-
-```
-INFO Starting phonehome server
-INFO Configuration loaded successfully from: "/etc/phonehome/config.toml"
-INFO Server will bind to: 0.0.0.0:8443
-INFO TLS setup completed successfully
-INFO Application router configured with routes:
-INFO   GET  /health - Health check endpoint
-INFO   POST /phone-home/:token - Phone home data endpoint
-```
-
-#### Request Processing
-
-```
-INFO [correlation-id] Received phone home request with token: abc123
-DEBUG [correlation-id] Phone home payload: {"instance_id": "i-1234567890abcdef0", ...}
-INFO [correlation-id] Processing phone home data for instance: "i-1234567890abcdef0"
-INFO [correlation-id] Extracted data: 4 fields, formatted as: '2024-01-15T10:30:45Z|i-1234567890abcdef0|web-server|10.0.1.100'
-```
-
-#### External Application Execution
-
-```
-INFO [correlation-id] Executing external application: /usr/bin/process-phone-home
-DEBUG [correlation-id] Command args: ["--source", "cloud-init"]
-DEBUG [correlation-id] Setting PHONEHOME_DATA environment variable
-INFO [correlation-id] External application executed successfully in 245ms
-```
-
-#### Authentication and Security
-
-```
-WARN [correlation-id] Invalid token provided: wrong-token
-ERROR [correlation-id] Authentication failed - rejecting request
-```
-
-#### TLS and Certificates
-
-```
-INFO TLS configuration found - setting up certificates
-INFO Certificate files validated successfully
-INFO Self-signed certificate generated successfully
-```
-
-#### Health Checks
-
-```
-DEBUG Health check endpoint accessed
-INFO Health check successful
-```
-
-### Log Rotation
-
-#### Built-in Rotation
-
-The server uses `tracing-appender` for built-in daily log rotation:
-
-- Logs rotate automatically at midnight (UTC)
-- Old files are named with date suffix: `phonehome.log.2024-01-14`
-- Rotation is transparent to the running application
-
-#### Logrotate Integration
-
-For more advanced rotation policies, use logrotate. Install the provided configuration:
-
-```bash
-sudo cp etc/logrotate.d/phonehome /etc/logrotate.d/
-```
-
-The logrotate configuration provides:
-- Daily rotation
-- 30-day retention
-- Compression of old logs
-- Proper permissions management
-- Signal handling for log file reopening
-
-#### Manual Rotation
-
-To manually rotate logs without stopping the service:
-
-```bash
-sudo logrotate -f /etc/logrotate.d/phonehome
-```
-
-### Monitoring and Analysis
-
-#### Finding Errors
-
-```bash
-# Recent errors
-grep "ERROR" /var/log/phonehome/phonehome.log | tail -20
-
-# Authentication failures
-grep "Authentication failed" /var/log/phonehome/phonehome.log
-```
-
-#### Performance Analysis
-
-```bash
-# External application execution times
-grep "executed successfully in" /var/log/phonehome/phonehome.log
-
-# Slow requests (over 1 second)
-grep -E "executed successfully in [1-9][0-9][0-9][0-9]ms" /var/log/phonehome/phonehome.log
-```
-
-#### Request Tracking
-
-```bash
-# Follow a specific request
-CORRELATION_ID="550e8400-e29b-41d4-a716-446655440000"
-grep "$CORRELATION_ID" /var/log/phonehome/phonehome.log
-```
-
-#### Statistics
-
-```bash
-# Request volume per hour
-grep "Received phone home request" /var/log/phonehome/phonehome.log | \
-  cut -d'T' -f2 | cut -d':' -f1 | sort | uniq -c
-
-# Most common instance IDs
-grep "Processing phone home data for instance" /var/log/phonehome/phonehome.log | \
-  grep -o '"[^"]*"' | sort | uniq -c | sort -nr
-```
-
-### Log Aggregation
-
-#### Systemd Journal
-
-When running as a systemd service, logs also go to the journal:
-
-```bash
-# Follow live logs
-journalctl -u phonehome -f
-
-# View recent logs
-journalctl -u phonehome --since "1 hour ago"
-
-# Filter by log level
-journalctl -u phonehome -p err
-```
-
-#### Centralized Logging
-
-For production deployments, consider centralized logging solutions:
-
-##### Rsyslog
-
-Configure rsyslog to forward logs:
-
-```
-# /etc/rsyslog.d/phonehome.conf
-if $programname == 'phonehome' then @@log-server:514
-& stop
-```
-
-##### Fluentd/Fluent Bit
-
-Monitor the log file and forward to Elasticsearch, S3, etc.:
-
-```yaml
-# fluent-bit.conf
-[INPUT]
-    Name tail
-    Path /var/log/phonehome/phonehome.log
-    Tag phonehome
-    Parser json
-
-[OUTPUT]
-    Name elasticsearch
-    Match phonehome
-    Host elasticsearch.example.com
-    Port 9200
-    Index phonehome
-```
-
-### Troubleshooting
-
-#### Log File Permissions
-
-Ensure proper permissions for log directory:
-
-```bash
-sudo mkdir -p /var/log/phonehome
-sudo chown phonehome:phonehome /var/log/phonehome
-sudo chmod 755 /var/log/phonehome
-```
-
-#### Disk Space
-
-Monitor disk usage for log directory:
-
-```bash
-# Check current usage
-du -sh /var/log/phonehome/
-
-# Set up monitoring alert
-df /var/log/phonehome | awk 'NR==2 {if($5+0 > 80) print "WARNING: Log partition over 80% full"}'
-```
-
-#### Debug Mode
-
-Enable debug logging for troubleshooting:
-
-```bash
-# Temporary debug mode
-phonehome --debug --config /etc/phonehome/config.toml
-
-# Or modify config.toml
-log_level = "debug"
-```
-
-#### Common Issues
-
-1. **Permission Denied**: Check file/directory ownership and permissions
-2. **Disk Full**: Verify log rotation is working and disk space is available
-3. **No Logs**: Check `enable_file` and `enable_console` settings
-4. **Slow Performance**: Review log level (trace/debug can be verbose)
-
-### Security Considerations
-
-#### Log Sanitization
-
-The server automatically sanitizes sensitive data in logs:
-- Tokens are partially masked in error messages
-- Personal data is not logged unless explicitly configured
-
-#### Access Control
-
-Secure log file access:
-
-```bash
-# Restrictive permissions
-sudo chmod 640 /var/log/phonehome/phonehome.log
-sudo chown phonehome:adm /var/log/phonehome/phonehome.log
-```
-
-#### Retention Policy
-
-Configure appropriate retention based on compliance requirements:
-- PCI DSS: 1 year minimum
-- GDPR: Based on data processing purposes
-- SOX: 7 years for financial data
-
-### Best Practices
-
-1. **Monitor Error Rates**: Set up alerts for ERROR level log entries
-2. **Regular Rotation**: Ensure logrotate is configured and running
-3. **Correlation IDs**: Use correlation IDs to trace issues across logs
-4. **Log Levels**: Use INFO for production, DEBUG for troubleshooting
-5. **Centralized Logging**: Consider log aggregation for multi-server deployments
-6. **Performance Impact**: Monitor log volume impact on I/O performance
-7. **Security**: Protect log files from unauthorized access
-8. **Backup**: Include log files in backup strategies for compliance
-
-### Complete Logging Setup
-
-1. Install the service:
-```bash
-sudo systemctl enable phonehome
-sudo systemctl start phonehome
-```
-
-2. Configure logrotate:
-```bash
-sudo cp etc/logrotate.d/phonehome /etc/logrotate.d/
-sudo logrotate -d /etc/logrotate.d/phonehome  # Test configuration
-```
-
-3. Set up monitoring:
-```bash
-# Add to crontab for daily error summary
-0 9 * * * grep "ERROR" /var/log/phonehome/phonehome.log.$(date -d yesterday +%Y-%m-%d) | mail -s "PhoneHome Errors" admin@example.com
-```
-
-This comprehensive logging system provides full visibility into PhoneHome server operations while maintaining performance and security.
-
-## RPM Repository
-
-The package is available in the COPR repository:
-- Repository: `antedebaas/phonehome`
-- Package name: `phonehome`
-- Install: `sudo dnf copr enable antedebaas/phonehome && sudo dnf install phonehome`
+- **Documentation**: Check this README and inline code documentation
+- **Issues**: Report bugs and feature requests via GitHub issues
+- **Logs**: Check `/var/log/phonehome/phonehome.log` for debugging information
+
+For additional help, enable debug logging and check the correlation IDs in the logs to track specific requests.
