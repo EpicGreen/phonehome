@@ -1,11 +1,15 @@
+%global commit %{?commitish}%{!?commitish:HEAD}
+%global shortcommit %(c=%{commit}; echo ${c:0:7})
+%global commit_date %(date +%%Y%%m%%d)
+
 Name:           phonehome
 Version:        0.1.11
-Release:        1%{?dist}
+Release:        %{commit_date}%{shortcommit}%{?dist}
 Summary:        Secure HTTPS server for Cloud Init phone home requests
 
 License:        AGPL-3.0-or-later
 URL:            https://github.com/epicgreen/phonehome
-Source0:        https://github.com/epicgreen/phonehome/archive/v%{version}/%{name}-%{version}.tar.gz
+Source0:        https://github.com/epicgreen/phonehome/archive/%{commit}/%{name}-%{commit}.tar.gz
 
 BuildRequires:  rust >= 1.70
 BuildRequires:  cargo
@@ -45,16 +49,16 @@ Features:
 - Rate limiting and input sanitization
 
 %prep
-%autosetup
+%setup -q -c
+mv %{name}-* %{name}-%{version}
 
 %build
-# Set up cargo home in build directory
+cd %{name}-%{version}
 export CARGO_HOME=$PWD/.cargo
-# Build with verbose output and offline mode disabled
 cargo build --release --verbose
 
 %install
-# Create system directories
+cd %{name}-%{version}
 install -d %{buildroot}%{_bindir}                                   # /usr/bin
 install -d %{buildroot}%{_sysconfdir}/%{name}                       # /etc/phonehome
 install -d %{buildroot}%{_localstatedir}/lib/%{name}                # /var/lib/phonehome
@@ -91,7 +95,6 @@ install -d %{buildroot}%{_localstatedir}/lib/%{name}
 install -d %{buildroot}%{_localstatedir}/log/%{name}
 
 %pre
-# Create phonehome user and group
 getent group phonehome >/dev/null || groupadd -r phonehome
 getent passwd phonehome >/dev/null || \
     useradd -r -g phonehome -d %{_localstatedir}/lib/phonehome \
@@ -104,7 +107,7 @@ chown root:phonehome %{_sysconfdir}/phonehome
 chmod 750 %{_localstatedir}/lib/phonehome
 chmod 750 %{_localstatedir}/log/phonehome
 chmod 750 %{_sysconfdir}/phonehome
-# Generate a secure random token if using default
+
 if grep -q "your-secret-token-here-change-me-123456" %{_sysconfdir}/phonehome/config.toml; then
     RANDOM_TOKEN=$(openssl rand -hex 32)
     sed -i "s/your-secret-token-here-change-me-123456/$RANDOM_TOKEN/" %{_sysconfdir}/phonehome/config.toml
