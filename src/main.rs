@@ -101,7 +101,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/", get(web::landing_page))
         .route("/health", get(health_check))
         .route(
-            "/phone-home/:token",
+            "/:token",
             MethodRouter::new()
                 .get(phone_home_get_handler)
                 .post(phone_home_handler),
@@ -112,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Application router configured with routes:");
     info!("  GET  / - Landing page");
     info!("  GET  /health - Health check endpoint");
-    info!("  POST /phone-home/:token - Phone home data endpoint");
+    info!("  POST /:token - Phone home data endpoint");
     info!("  Fallback: Custom 404 error page");
     debug!("Router built successfully with shared state");
 

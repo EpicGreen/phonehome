@@ -1,75 +1,15 @@
 # LogRotate configuration for PhoneHome server
-# This file should be installed to /etc/logrotate.d/phonehome
-
 /var/log/phonehome/*.log {
-    # Rotate logs daily
     daily
-    
-    # Keep 30 days of logs (adjust as needed)
     rotate 30
-    
-    # Compress old log files to save space
     compress
-    
-    # Don't compress the first rotated file (most recent backup)
     delaycompress
-    
-    # Don't rotate if the log file is empty
     notifempty
-    
-    # Create new log files with specific permissions
-    # Owner: phonehome, Group: phonehome, Mode: 640
     create 640 phonehome phonehome
-    
-    # Handle missing log files gracefully
     missingok
-    
-    # Use date as suffix for rotated files (YYYYMMDD)
     dateext
-    
-    # Use UTC time for date extensions
-    dateyesterday
-    
-    # Copy and truncate the original log file instead of moving it
-    # This is important for applications that keep the log file open
-    copytruncate
-    
-    # Send HUP signal to phonehome process to reopen log files
-    # Uncomment the following lines if you prefer signal-based rotation
-    # postrotate
-    #     /bin/kill -HUP `cat /var/run/phonehome.pid 2> /dev/null` 2> /dev/null || true
-    # endscript
-    
-    # Run commands before rotation (optional)
-    prerotate
-        # Ensure log directory exists and has correct permissions
-        /bin/mkdir -p /var/log/phonehome
-        /bin/chown phonehome:phonehome /var/log/phonehome
-        /bin/chmod 750 /var/log/phonehome
-    endscript
-    
-    # Run commands after rotation (optional)
+    sharedscripts
     postrotate
-        # Update file permissions on rotated logs
-        /bin/find /var/log/phonehome -name "*.log.*" -exec /bin/chown phonehome:phonehome {} \;
-        /bin/find /var/log/phonehome -name "*.log.*" -exec /bin/chmod 640 {} \;
+        /bin/systemctl reload phonehome.service > /dev/null 2>&1 || true
     endscript
 }
-
-# Alternative configuration for systems with systemd
-# Uncomment this section if you want to use systemd journal integration
-#
-# /var/log/phonehome/*.log {
-#     daily
-#     rotate 30
-#     compress
-#     delaycompress
-#     notifempty
-#     create 640 phonehome phonehome
-#     missingok
-#     dateext
-#     sharedscripts
-#     postrotate
-#         /bin/systemctl reload phonehome.service > /dev/null 2>&1 || true
-#     endscript
-# }
