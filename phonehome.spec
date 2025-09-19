@@ -1,6 +1,6 @@
 %global commit %{?commitish}%{!?commitish:HEAD}
 %global shortcommit %(c=%{commit}; echo ${c:0:7})
-%global commit_date %(date +%%Y%%m%%d)
+%global commit_date %(date +%%Y%%m%%d%%H%%M%%S)
 
 Name:           phonehome
 Version:        0.1.12
