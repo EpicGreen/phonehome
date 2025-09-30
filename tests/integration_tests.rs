@@ -48,8 +48,8 @@ fn create_test_config() -> Config {
         logging: LoggingConfig {
             log_file: std::path::PathBuf::from("/tmp/phonehome-test.log"),
             log_level: "debug".to_string(),
-            enable_console: false, // Disable console logging in tests
-            enable_file: false,    // Disable file logging in tests
+            log_to_file: false,     // Disable file logging in tests
+            log_to_journald: false, // Disable journald logging in tests
             max_file_size_mb: 10,
             max_files: 3,
         },
@@ -61,11 +61,7 @@ fn create_test_config() -> Config {
             command: "echo".to_string(),
             args: vec!["test-processed:".to_string()],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         },
         phone_home: PhoneHomeConfig {
@@ -77,6 +73,7 @@ fn create_test_config() -> Config {
             field_separator: "|".to_string(),
             include_timestamp: true,
             include_instance_id: true,
+            output_type: "string".to_string(),
         },
     }
 }
@@ -130,8 +127,8 @@ token = "test-token"
 [logging]
 log_file = "/tmp/test-phonehome.log"
 log_level = "info"
-enable_console = true
-enable_file = false
+log_to_file = false
+log_to_journald = false
 max_file_size_mb = 10
 max_files = 3
 
@@ -230,6 +227,7 @@ mod models_tests {
             field_separator: "|".to_string(),
             include_timestamp: false,
             include_instance_id: false,
+            output_type: "string".to_string(),
         };
 
         let processed = data.process(&config);
@@ -252,6 +250,7 @@ mod models_tests {
             field_separator: "|".to_string(),
             include_timestamp: true,
             include_instance_id: true,
+            output_type: "string".to_string(),
         };
 
         let processed = data.process(&config);
@@ -385,7 +384,6 @@ mod tls_tests {
 mod handlers_tests {
     use super::*;
     use phonehome::handlers::validate_external_app;
-    use std::collections::HashMap;
 
     #[tokio::test]
     async fn test_validate_external_app_success() {
@@ -393,11 +391,7 @@ mod handlers_tests {
             command: "echo".to_string(),
             args: vec![],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
@@ -411,11 +405,7 @@ mod handlers_tests {
             command: "non-existent-command-12345".to_string(),
             args: vec![],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
@@ -424,41 +414,31 @@ mod handlers_tests {
     }
 
     #[tokio::test]
-    async fn test_validate_external_app_with_working_directory() {
+    async fn test_validate_external_app_with_simple_command() {
         let config = ExternalAppConfig {
             command: "pwd".to_string(),
             args: vec![],
             timeout_seconds: 5,
-            working_directory: Some("/tmp".into()),
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
+        // Should succeed
         let result = validate_external_app(&config).await;
-        // Should not fail validation even if --version is not supported
         assert!(result.is_ok());
     }
 
     #[tokio::test]
-    async fn test_validate_external_app_with_environment() {
-        let mut env_vars = HashMap::new();
-        env_vars.insert("TEST_VAR".to_string(), "test_value".to_string());
-
+    async fn test_validate_external_app_with_args() {
         let config = ExternalAppConfig {
             command: "echo".to_string(),
-            args: vec![],
+            args: vec!["test".to_string()],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: Some(env_vars),
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
+        // Should succeed
         let result = validate_external_app(&config).await;
         assert!(result.is_ok());
     }
@@ -470,11 +450,7 @@ mod handlers_tests {
             command: "echo".to_string(),
             args: vec![],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: true,
         };
 
@@ -483,11 +459,7 @@ mod handlers_tests {
             command: "echo".to_string(),
             args: vec![],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
@@ -967,16 +939,16 @@ mod logging_tests {
         let logging_config = LoggingConfig {
             log_file,
             log_level: "info".to_string(),
-            enable_console: true,
-            enable_file: true,
+            log_to_file: true,
+            log_to_journald: false,
             max_file_size_mb: 50,
             max_files: 5,
         };
 
         // Test that the logging config has expected defaults
         assert_eq!(logging_config.log_level, "info");
-        assert!(logging_config.enable_console);
-        assert!(logging_config.enable_file);
+        assert!(logging_config.log_to_file);
+        assert!(!logging_config.log_to_journald);
         assert_eq!(logging_config.max_file_size_mb, 50);
         assert_eq!(logging_config.max_files, 5);
     }
@@ -1003,6 +975,9 @@ mod logging_tests {
     #[tokio::test]
     async fn test_logging_levels_validation() {
         let mut config = create_test_config();
+
+        // Enable file logging for validation to pass
+        config.logging.log_to_file = true;
 
         // Test valid log levels
         let valid_levels = ["trace", "debug", "info", "warn", "error"];

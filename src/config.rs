@@ -24,8 +24,8 @@ pub struct ServerConfig {
 pub struct LoggingConfig {
     pub log_file: PathBuf,
     pub log_level: String,
-    pub enable_console: bool,
-    pub enable_file: bool,
+    pub log_to_file: bool,
+    pub log_to_journald: bool,
     pub max_file_size_mb: u64,
     pub max_files: u32,
 }
@@ -41,16 +41,10 @@ pub struct ExternalAppConfig {
     pub command: String,
     pub args: Vec<String>,
     pub timeout_seconds: u64,
-    pub working_directory: Option<PathBuf>,
-    pub environment: Option<std::collections::HashMap<String, String>>,
 
     // Security settings
     #[serde(default = "default_max_data_length")]
     pub max_data_length: usize,
-    #[serde(default)]
-    pub allow_control_chars: bool,
-    #[serde(default = "default_true")]
-    pub sanitize_input: bool,
     #[serde(default)]
     pub quote_data: bool,
 }
@@ -59,8 +53,8 @@ fn default_max_data_length() -> usize {
     4096
 }
 
-fn default_true() -> bool {
-    true
+fn default_output_type() -> String {
+    "string".to_string()
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -69,6 +63,8 @@ pub struct PhoneHomeConfig {
     pub field_separator: String,
     pub include_timestamp: bool,
     pub include_instance_id: bool,
+    #[serde(default = "default_output_type")]
+    pub output_type: String,
 }
 
 impl Default for Config {
@@ -82,8 +78,8 @@ impl Default for Config {
             logging: LoggingConfig {
                 log_file: PathBuf::from("/var/log/phonehome/phonehome.log"),
                 log_level: "info".to_string(),
-                enable_console: true,
-                enable_file: true,
+                log_to_file: true,
+                log_to_journald: false,
                 max_file_size_mb: 100,
                 max_files: 10,
             },
@@ -95,11 +91,7 @@ impl Default for Config {
                 command: "/usr/local/bin/process-phone-home".to_string(),
                 args: vec!["--data".to_string()],
                 timeout_seconds: 30,
-                working_directory: None,
-                environment: None,
                 max_data_length: 4096,
-                allow_control_chars: false,
-                sanitize_input: true,
                 quote_data: false,
             },
             phone_home: PhoneHomeConfig {
@@ -114,6 +106,7 @@ impl Default for Config {
                 field_separator: "|".to_string(),
                 include_timestamp: true,
                 include_instance_id: true,
+                output_type: "string".to_string(),
             },
         }
     }
@@ -246,25 +239,12 @@ impl Config {
             anyhow::bail!("External application timeout must be greater than 0");
         }
 
-        if let Some(ref working_dir) = self.external_app.working_directory {
-            debug!("External app working directory: {:?}", working_dir);
-        }
-
-        if let Some(ref env) = self.external_app.environment {
-            debug!("External app environment variables: {:?}", env);
-        }
-
         // Validate security settings
         debug!("Validating external app security settings");
         debug!(
             "Max data length: {} bytes",
             self.external_app.max_data_length
         );
-        debug!(
-            "Allow control chars: {}",
-            self.external_app.allow_control_chars
-        );
-        debug!("Sanitize input: {}", self.external_app.sanitize_input);
         debug!("Quote data: {}", self.external_app.quote_data);
 
         if self.external_app.max_data_length == 0 {
@@ -283,8 +263,8 @@ impl Config {
         debug!("Validating logging configuration");
         debug!("Log file: {:?}", self.logging.log_file);
         debug!("Log level: {}", self.logging.log_level);
-        debug!("Console logging: {}", self.logging.enable_console);
-        debug!("File logging: {}", self.logging.enable_file);
+        debug!("File logging: {}", self.logging.log_to_file);
+        debug!("Journald logging: {}", self.logging.log_to_journald);
 
         // Validate log level
         match self.logging.log_level.to_lowercase().as_str() {
@@ -300,10 +280,15 @@ impl Config {
             }
         }
 
-        if self.logging.enable_file {
+        if self.logging.log_to_file {
             if let Some(parent) = self.logging.log_file.parent() {
                 debug!("Log file directory: {:?}", parent);
             }
+        }
+
+        // Validate that at least one logging output is enabled (console is always available via --no-daemon)
+        if !self.logging.log_to_file && !self.logging.log_to_journald {
+            warn!("No persistent logging outputs enabled - only console logging will be available");
         }
 
         // Validate phone home configuration
@@ -315,6 +300,7 @@ impl Config {
             "Include instance ID: {}",
             self.phone_home.include_instance_id
         );
+        debug!("Output type: {}", self.phone_home.output_type);
 
         if self.phone_home.fields_to_extract.is_empty() {
             warn!("No fields configured for extraction - external app will receive empty data");
@@ -323,6 +309,23 @@ impl Config {
                 "Configured to extract {} fields",
                 self.phone_home.fields_to_extract.len()
             );
+        }
+
+        // Validate output type
+        match self.phone_home.output_type.to_lowercase().as_str() {
+            "string" | "json" | "sql" => {
+                debug!(
+                    "Output type validation passed: {}",
+                    self.phone_home.output_type
+                );
+            }
+            _ => {
+                error!(
+                    "Invalid output type: {}. Must be one of: string, json, sql",
+                    self.phone_home.output_type
+                );
+                anyhow::bail!("Invalid output type: {}", self.phone_home.output_type);
+            }
         }
 
         info!("Configuration validation completed successfully");

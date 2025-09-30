@@ -3,7 +3,7 @@
 %global commit_date %(date +%%Y%%m%%d%%H%%M%%S)
 
 Name:           phonehome
-Version:        0.1.12
+Version:        0.2.0
 Release:        %{commit_date}%{shortcommit}%{?dist}
 Summary:        Secure HTTPS server for Cloud Init phone home requests
 

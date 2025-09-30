@@ -20,11 +20,11 @@ log_file = "/var/log/phonehome/phonehome.log"
 # Log level: trace, debug, info, warn, error
 log_level = "info"
 
-# Enable console logging (stdout/stderr)
-enable_console = true
+# Enable file logging with daily rotation
+log_to_file = true
 
-# Enable file logging
-enable_file = true
+# Enable systemd journald logging
+log_to_journald = false
 
 # Maximum log file size in MB before rotation (used by tracing-appender)
 max_file_size_mb = 100
@@ -59,25 +59,11 @@ args = ["--source", "cloud-init", "--format", "pipe-separated", "--data" , "${Ph
 # Timeout in seconds for the external application execution
 timeout_seconds = 30
 
-# Working directory for the external application (optional)
-# working_directory = "/var/lib/phonehome"
-
-# Environment variables to set for the external application (optional)
-# [external_app.environment]
-# API_KEY = "your-api-key"
-# LOG_LEVEL = "info"
-
 # Security Settings for External Application
 # Maximum length of data that can be passed to external application (in bytes)
 max_data_length = 4096
 
-# Whether to allow control characters in the data (default: false for security)
-allow_control_chars = false
-
-# Whether to sanitize input data before passing to external application (default: true)
-sanitize_input = true
-
-# Whether to encapsulate the sanitized data argument in quotes (default: false)
+# Whether to encapsulate the data argument in quotes (default: false)
 # Set to true if your external application expects quoted arguments
 quote_data = true
 
@@ -116,3 +102,10 @@ include_timestamp = true
 
 # Whether to include the instance_id as a separate field (even if not in fields_to_extract)
 include_instance_id = true
+
+# Output format type for the extracted data
+# Available options:
+# - "string": Pipe-separated string format (default)
+# - "json": JSON object format
+# - "sql": SQL INSERT query format
+output_type = "string"

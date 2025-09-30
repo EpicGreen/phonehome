@@ -74,7 +74,7 @@ pub async fn landing_page() -> Html<&'static str> {
 </head>
 <body>
     <div class="container">
-        <h1>🏠 PhoneHome Server</h1>
+        <h1>PhoneHome Server</h1>
 
         <div class="status">
             <strong>✅ Service Status:</strong> Running and ready to accept Cloud Init phone home requests
@@ -91,7 +91,7 @@ pub async fn landing_page() -> Html<&'static str> {
         </div>
 
         <div class="endpoint">
-            <strong>POST /phone-home/{token}</strong><br>
+            <strong>POST /{token}</strong><br>
             Cloud Init phone home data submission endpoint<br>
             <em>Requires valid authentication token and JSON payload</em>
         </div>
@@ -102,15 +102,11 @@ pub async fn landing_page() -> Html<&'static str> {
         <pre><code>#cloud-config
 phone_home:
   url: "https://your-server.com:8443/phone-home/your-token"
-  post: [ instance_id, hostname, fqdn, pub_key_rsa, pub_key_ecdsa, pub_key_ed25519 ]
-  tries: 10</code></pre>
-
-        <div class="warning">
-            <strong>⚠️ Security Notice:</strong> This service requires proper authentication tokens. Unauthorized access attempts are logged and monitored.
-        </div>
-
+  post: all
+  tries: 10
+        </code></pre>
         <div class="footer">
-            <p>PhoneHome Server - Secure Cloud Init Phone Home Handler</p>
+            <p>PhoneHome Server - Cloud Init Phone Home Handler</p>
         </div>
     </div>
 </body>

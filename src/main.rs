@@ -31,6 +31,10 @@ struct Cli {
     /// Enable debug logging
     #[arg(short, long)]
     debug: bool,
+
+    /// Run in foreground with console output (don't daemonize)
+    #[arg(long)]
+    no_daemon: bool,
 }
 
 #[tokio::main]
@@ -40,8 +44,8 @@ async fn main() -> anyhow::Result<()> {
     // Load configuration first to get logging settings
     let config = Config::load(&cli.config).await?;
 
-    // Initialize logging based on configuration
-    setup_logging(&config, cli.debug).await?;
+    // Initialize logging based on configuration and --no-daemon flag
+    setup_logging(&config, cli.debug, cli.no_daemon).await?;
 
     info!("Starting phonehome server");
     info!("Configuration loaded successfully from: {:?}", cli.config);
@@ -162,8 +166,13 @@ async fn start_https_server(
 }
 
 /// Setup logging based on configuration
-async fn setup_logging(config: &Config, debug_override: bool) -> anyhow::Result<()> {
+async fn setup_logging(
+    config: &Config,
+    debug_override: bool,
+    console_output: bool,
+) -> anyhow::Result<()> {
     use tracing_appender::rolling::RollingFileAppender;
+    use tracing_journald;
     use tracing_subscriber::fmt;
 
     // Determine log level - CLI debug flag overrides config
@@ -186,14 +195,14 @@ async fn setup_logging(config: &Config, debug_override: bool) -> anyhow::Result<
 
     eprintln!("Setting up logging with level: {:?}", log_level);
     eprintln!(
-        "Logging configuration: enable_console={}, enable_file={}, log_file={:?}",
-        config.logging.enable_console, config.logging.enable_file, config.logging.log_file
+        "Logging configuration: console_output={}, log_to_file={}, log_to_journald={}, log_file={:?}",
+        console_output, config.logging.log_to_file, config.logging.log_to_journald, config.logging.log_file
     );
 
     let mut layers = Vec::new();
 
-    // Console logging layer
-    if config.logging.enable_console {
+    // Console logging layer (enabled by --no-daemon flag)
+    if console_output {
         let console_layer = fmt::layer()
             .with_target(false)
             .with_thread_ids(false)
@@ -211,7 +220,7 @@ async fn setup_logging(config: &Config, debug_override: bool) -> anyhow::Result<
     }
 
     // File logging layer
-    if config.logging.enable_file {
+    if config.logging.log_to_file {
         // Ensure log directory exists
         if let Some(log_dir) = config.logging.log_file.parent() {
             tokio::fs::create_dir_all(log_dir).await.map_err(|e| {
@@ -264,6 +273,25 @@ async fn setup_logging(config: &Config, debug_override: bool) -> anyhow::Result<
         eprintln!("File logging disabled");
     }
 
+    // Journald logging layer
+    if config.logging.log_to_journald {
+        match tracing_journald::layer() {
+            Ok(journald_layer) => {
+                let filtered_journald_layer = journald_layer.with_filter(
+                    tracing_subscriber::filter::LevelFilter::from_level(log_level),
+                );
+                layers.push(filtered_journald_layer.boxed());
+                eprintln!("Journald logging enabled");
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to initialize journald logging: {}", e);
+                eprintln!("Journald logging disabled - continuing with other logging outputs");
+            }
+        }
+    } else {
+        eprintln!("Journald logging disabled");
+    }
+
     // Drop the temporary guard to allow new subscriber
     drop(_guard);
 
@@ -272,11 +300,15 @@ async fn setup_logging(config: &Config, debug_override: bool) -> anyhow::Result<
 
     info!("Logging system initialized successfully");
     info!("Log level: {:?}", log_level);
-    info!("Console logging: {}", config.logging.enable_console);
-    info!("File logging: {}", config.logging.enable_file);
+    info!("Console logging: {}", console_output);
+    info!("File logging: {}", config.logging.log_to_file);
+    info!("Journald logging: {}", config.logging.log_to_journald);
 
-    if config.logging.enable_file {
+    if config.logging.log_to_file {
         info!("Log file: {:?}", config.logging.log_file);
+    }
+    if config.logging.log_to_journald {
+        info!("Journald logging active - logs will appear in systemd journal");
     }
 
     Ok(())

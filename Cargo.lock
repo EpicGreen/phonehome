@@ -896,7 +896,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "phonehome"
-version = "0.1.12"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -918,6 +918,7 @@ dependencies = [
  "tower 0.4.13",
  "tracing",
  "tracing-appender",
+ "tracing-journald",
  "tracing-subscriber",
  "urlencoding",
  "uuid",
@@ -1544,6 +1545,17 @@ checksum = "b9d12581f227e93f094d3af2ae690a574abb8a2b9b7a96e7cfe9647b2b617678"
 dependencies = [
  "once_cell",
  "valuable",
+]
+
+[[package]]
+name = "tracing-journald"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc0b4143302cf1022dac868d521e36e8b27691f72c84b3311750d5188ebba657"
+dependencies = [
+ "libc",
+ "tracing-core",
+ "tracing-subscriber",
 ]
 
 [[package]]

@@ -94,8 +94,11 @@ sudo chmod +x /usr/local/bin/process-phone-home
 sudo systemctl enable phonehome
 sudo systemctl start phonehome
 
-# Or run directly
+# Or run directly (daemon mode)
 sudo /usr/local/bin/phonehome --config /etc/phonehome/config.toml
+
+# For development (foreground with console output)
+sudo /usr/local/bin/phonehome --config /etc/phonehome/config.toml --no-daemon
 ```
 
 ### 8. Test the Setup
@@ -143,15 +146,71 @@ key_path = "/var/lib/phonehome/key.pem"    # TLS private key file
 
 ### Logging Configuration
 
+The server supports multiple logging outputs:
+
 ```toml
 [logging]
 log_file = "/var/log/phonehome/phonehome.log"  # Log file path
 log_level = "info"                             # Log level (trace, debug, info, warn, error)
-enable_console = true                          # Enable console output
-enable_file = true                             # Enable file logging
+log_to_file = true                             # Enable file logging with daily rotation
+log_to_journald = false                        # Enable systemd journald logging
 max_file_size_mb = 100                        # Maximum log file size before rotation
 max_files = 10                                # Number of rotated log files to keep
 ```
+
+#### Logging Output Options
+
+- **Console logging**: Enabled via `--no-daemon` command line flag for development and debugging
+- **File logging** (`log_to_file`): Traditional log files with daily rotation, compatible with logrotate
+- **Journald logging** (`log_to_journald`): Systemd journal integration for structured logging
+
+**Note**: Console output is controlled by the `--no-daemon` flag, not configuration. At least one persistent logging output (file or journald) should be enabled for production use.
+
+#### Systemd Journal Integration
+
+When `enable_journald = true`, logs are sent to the systemd journal:
+
+```bash
+# View logs in real-time
+journalctl -u phonehome -f
+
+# View logs since today
+journalctl -u phonehome --since today
+
+# Filter by log level (err, warning, info, debug)
+journalctl -u phonehome -p err
+
+# Export logs as JSON
+journalctl -u phonehome --since '2023-01-01' -o json
+```
+
+#### Configuration Examples
+
+**Production (Journald only)**:
+```toml
+[logging]
+log_to_file = false
+log_to_journald = true
+log_level = "info"
+```
+
+**Development (Console with --no-daemon)**:
+```toml
+[logging]
+log_to_file = false
+log_to_journald = false
+log_level = "debug"
+```
+Run with: `phonehome --no-daemon`
+
+**Comprehensive (File + Journald)**:
+```toml
+[logging]
+log_to_file = true
+log_to_journald = true
+log_level = "info"
+```
+Add `--no-daemon` for console output during development.
 
 ### External Application Configuration
 
@@ -162,19 +221,13 @@ The server can execute external applications when phone home data is received. D
 command = "/usr/local/bin/process-phone-home"  # Command to execute
 args = ["${PhoneHomeData}"]                    # Arguments (${PhoneHomeData} will be replaced)
 timeout_seconds = 30                           # Execution timeout
-working_directory = "/var/lib/phonehome"       # Working directory (optional)
 
 # Security settings
 max_data_length = 4096                         # Maximum data length in bytes
-allow_control_chars = false                    # Allow control characters (default: false)
-sanitize_input = true                          # Sanitize input data (default: true)
 quote_data = false                             # Quote data when using ${PhoneHomeData} (default: false)
-
-# Environment variables for the external application (optional)
-[external_app.environment]
-API_KEY = "your-api-key"
-LOG_LEVEL = "info"
 ```
+
+**Security**: Input data is automatically sanitized and control characters are filtered for security. The external application runs with no special environment variables or working directory.
 
 **Data Passing**: Phone home data is passed to your external application via the `${PhoneHomeData}` placeholder in the arguments configuration. Your application receives this data as command line arguments.
 
@@ -191,9 +244,38 @@ fields_to_extract = [
     "pub_key_ecdsa",
     "pub_key_ed25519"
 ]
-field_separator = "|"                          # Separator between fields
+field_separator = "|"                          # Separator between fields (used for string output)
 include_timestamp = true                       # Include timestamp as first field
 include_instance_id = true                     # Include instance_id separately
+
+# Output format type for the extracted data
+# Available options:
+# - "string": Pipe-separated string format (default, backward compatible)
+# - "json": JSON object format
+# - "sql": SQL INSERT query format
+output_type = "string"
+```
+
+#### Output Format Examples
+
+With the same input data, the different output types produce:
+
+**String format** (`output_type = "string"`):
+```
+2023-12-01T10:00:00Z|i-1234567890abcdef0|web-server-01|web-server-01.example.com|ssh-rsa AAAAB3...
+```
+
+**JSON format** (`output_type = "json"`):
+```json
+{"timestamp":"2023-12-01T10:00:00Z","instance_id":"i-1234567890abcdef0","hostname":"web-server-01","fqdn":"web-server-01.example.com","pub_key_rsa":"ssh-rsa AAAAB3..."}
+```
+
+**SQL format** (`output_type = "sql"`):
+```sql
+INSERT INTO phone_home_data (timestamp, instance_id, hostname, fqdn, pub_key_rsa) VALUES ('2023-12-01T10:00:00Z', 'i-1234567890abcdef0', 'web-server-01', 'web-server-01.example.com', 'ssh-rsa AAAAB3...');
+```
+
+**Security Note**: SQL format automatically escapes single quotes to prevent injection attacks, but external applications should still use parameterized queries for maximum security.
 ```
 
 ## Cloud Init Integration

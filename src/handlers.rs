@@ -287,35 +287,30 @@ fn sanitize_external_app_data(
         return Err(error_msg.into());
     }
 
-    // Check for control characters that could be problematic
-    if !config.allow_control_chars {
-        let has_dangerous_chars = data
-            .chars()
-            .any(|c| c.is_control() && c != '\t' && c != '\n' && c != '\r');
+    // Hardcoded security: always check for dangerous control characters
+    let has_dangerous_chars = data
+        .chars()
+        .any(|c| c.is_control() && c != '\t' && c != '\n' && c != '\r');
 
-        if has_dangerous_chars {
-            let error_msg = "Data contains dangerous control characters";
-            warn!("[{}] {}", correlation_id, error_msg);
-            return Err(error_msg.into());
-        }
+    if has_dangerous_chars {
+        let error_msg = "Data contains dangerous control characters";
+        warn!("[{}] {}", correlation_id, error_msg);
+        return Err(error_msg.into());
     }
 
-    // Optional: Sanitize input if configured
-    let sanitized = if config.sanitize_input {
-        data.chars()
-            .filter(|&c| {
-                // Allow alphanumeric, common punctuation, and safe whitespace
-                c.is_ascii_alphanumeric()
-                    || c.is_ascii_punctuation()
-                    || c == ' '
-                    || c == '\t'
-                    || c == '\n'
-                    || c == '\r'
-            })
-            .collect::<String>()
-    } else {
-        data.to_string()
-    };
+    // Hardcoded security: always sanitize input
+    let sanitized = data
+        .chars()
+        .filter(|&c| {
+            // Allow alphanumeric, common punctuation, and safe whitespace
+            c.is_ascii_alphanumeric()
+                || c.is_ascii_punctuation()
+                || c == ' '
+                || c == '\t'
+                || c == '\n'
+                || c == '\r'
+        })
+        .collect::<String>();
 
     // Log if data was modified
     if sanitized != data {
@@ -379,25 +374,6 @@ async fn execute_external_app(
             arg.clone()
         };
         cmd.arg(processed_arg);
-    }
-
-    // Set working directory if configured
-    if let Some(ref working_dir) = config.working_directory {
-        cmd.current_dir(working_dir);
-        debug!("[{}] Working directory: {:?}", correlation_id, working_dir);
-    }
-
-    // Set environment variables if configured
-    if let Some(ref env_vars) = config.environment {
-        debug!(
-            "[{}] Setting {} environment variables",
-            correlation_id,
-            env_vars.len()
-        );
-        for (key, value) in env_vars {
-            cmd.env(key, value);
-            debug!("[{}] ENV: {}={}", correlation_id, key, value);
-        }
     }
 
     // Configure stdio
@@ -488,11 +464,6 @@ pub async fn validate_external_app(
         .stderr(Stdio::piped())
         .stdin(Stdio::null());
 
-    // Set working directory if configured
-    if let Some(ref working_dir) = config.working_directory {
-        cmd.current_dir(working_dir);
-    }
-
     let timeout_duration = Duration::from_secs(5); // Short timeout for validation
 
     let start_time = std::time::Instant::now();
@@ -547,7 +518,6 @@ pub async fn validate_external_app(
 mod tests {
     use super::*;
     use crate::config::ExternalAppConfig;
-    use std::collections::HashMap;
 
     #[tokio::test]
     async fn test_execute_external_app_success() {
@@ -558,11 +528,7 @@ mod tests {
                 "echo Processing: ${PhoneHomeData}".to_string(),
             ],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
@@ -575,22 +541,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_execute_external_app_with_env() {
-        let mut env_vars = HashMap::new();
-        env_vars.insert("TEST_VAR".to_string(), "test_value".to_string());
-
+    async fn test_execute_external_app_with_data_replacement() {
         let config = ExternalAppConfig {
             command: "sh".to_string(),
-            args: vec![
-                "-c".to_string(),
-                "echo $TEST_VAR ${PhoneHomeData}".to_string(),
-            ],
+            args: vec!["-c".to_string(), "echo Data: ${PhoneHomeData}".to_string()],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: Some(env_vars),
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
@@ -598,8 +554,8 @@ mod tests {
         let result = execute_external_app(&config, "test-phonehome-data", &correlation_id).await;
         assert!(result.is_ok());
         let output = result.unwrap();
-        assert!(output.contains("test_value")); // From TEST_VAR
         assert!(output.contains("test-phonehome-data")); // From ${PhoneHomeData}
+        assert!(output.contains("Data:")); // From our echo command
     }
 
     #[tokio::test]
@@ -608,11 +564,7 @@ mod tests {
             command: "sh".to_string(),
             args: vec!["-c".to_string(), "sleep 10".to_string()],
             timeout_seconds: 1,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
@@ -629,11 +581,7 @@ mod tests {
             command: "nonexistentcommand".to_string(),
             args: vec![],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
@@ -648,11 +596,7 @@ mod tests {
             command: "echo".to_string(),
             args: vec![],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
@@ -666,11 +610,7 @@ mod tests {
             command: "non-existent-command-12345".to_string(),
             args: vec![],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
@@ -685,11 +625,7 @@ mod tests {
             command: "echo".to_string(),
             args: vec!["${PhoneHomeData}".to_string()],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: true,
         };
 
@@ -707,11 +643,7 @@ mod tests {
             command: "echo".to_string(),
             args: vec!["${PhoneHomeData}".to_string()],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
@@ -736,11 +668,7 @@ mod tests {
                 "echo 'Received: ${PhoneHomeData}'".to_string(),
             ],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
@@ -764,11 +692,7 @@ mod tests {
                 "echo 'Data: ${PhoneHomeData}'".to_string(),
             ],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: true,
         };
 
@@ -792,11 +716,7 @@ mod tests {
                 "echo 'First: ${PhoneHomeData}' && echo 'Second: ${PhoneHomeData}'".to_string(),
             ],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
@@ -818,11 +738,7 @@ mod tests {
             command: "sh".to_string(),
             args: vec!["-c".to_string(), "echo 'No placeholder here'".to_string()],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
@@ -836,36 +752,25 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_no_environment_variables_set() {
-        // Test that no environment variables are set for the external app
+    async fn test_simple_command_execution() {
         let config = ExternalAppConfig {
             command: "sh".to_string(),
             args: vec![
                 "-c".to_string(),
-                "echo \"PHONEHOME_DATA=$PHONEHOME_DATA\" && echo \"DATA=$DATA\"".to_string(),
+                "echo \"Command executed successfully\"".to_string(),
             ],
             timeout_seconds: 5,
-            working_directory: None,
-            environment: None,
             max_data_length: 4096,
-            allow_control_chars: false,
-            sanitize_input: true,
             quote_data: false,
         };
 
-        let correlation_id = Uuid::new_v4();
-        let test_data = "test-data-123";
+        let test_data = "test_data";
+        let result = execute_external_app(&config, test_data, &Uuid::new_v4()).await;
 
-        let result = execute_external_app(&config, test_data, &correlation_id).await;
         assert!(result.is_ok());
         let output = result.unwrap();
 
-        // Verify that no PHONEHOME_DATA environment variable is set
-        assert!(output.contains("PHONEHOME_DATA="));
-        assert!(!output.contains("PHONEHOME_DATA=test-data-123"));
-
-        // Verify that no DATA environment variable is set
-        assert!(output.contains("DATA="));
-        assert!(!output.contains("DATA=test-data-123"));
+        // Should contain our test message
+        assert!(output.contains("Command executed successfully"));
     }
 }
