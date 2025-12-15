@@ -83,13 +83,6 @@ install -m 644 README.md %{buildroot}%{_docdir}/%{name}/
 install -d %{buildroot}%{_licensedir}/%{name}
 install -m 644 LICENSE %{buildroot}%{_licensedir}/%{name}/LICENSE
 
-# Install configuration directory and example config
-install -d %{buildroot}%{_sysconfdir}/%{name}
-install -D -m 644 etc/%{name}/config.toml %{buildroot}%{_sysconfdir}/%{name}/config.toml
-
-# Install bash completion
-install -D -m 644 etc/bash-completion/%{name} %{buildroot}%{_datadir}/bash-completion/completions/%{name}
-
 # Create necessary directories for runtime data
 install -d %{buildroot}%{_localstatedir}/lib/%{name}
 install -d %{buildroot}%{_localstatedir}/log/%{name}
