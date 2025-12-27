@@ -46,7 +46,6 @@ Features:
 
 %prep
 %setup -q -c
-mv %{name}-* %{name}-%{version}
 
 %build
 cd %{name}-%{version}
