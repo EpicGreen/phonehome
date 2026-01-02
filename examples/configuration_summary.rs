@@ -38,7 +38,7 @@ fn main() {
                 "--source".to_string(),
                 "cloud-init".to_string(),
                 "--data".to_string(),
-                "${PhoneHomeData}".to_string(),
+                "{{PhoneHomeData}}".to_string(),
             ],
             timeout_seconds: 30,
             max_data_length: 4096,

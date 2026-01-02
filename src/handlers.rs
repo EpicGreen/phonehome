@@ -361,10 +361,10 @@ async fn execute_external_app(
         correlation_id, config.quote_data
     );
 
-    // Add configured arguments, replacing ${PhoneHomeData} placeholder with sanitized data
+    // Add configured arguments, replacing {{PhoneHomeData}} placeholder with sanitized data
     for arg in &config.args {
-        let processed_arg = if arg.contains("${PhoneHomeData}") {
-            let replaced_arg = arg.replace("${PhoneHomeData}", &data_value);
+        let processed_arg = if arg.contains("{{PhoneHomeData}}") {
+            let replaced_arg = arg.replace("{{PhoneHomeData}}", &data_value);
             debug!(
                 "[{}] Replaced placeholder in argument: '{}' -> '{}'",
                 correlation_id, arg, replaced_arg
@@ -525,7 +525,7 @@ mod tests {
             command: "sh".to_string(),
             args: vec![
                 "-c".to_string(),
-                "echo Processing: ${PhoneHomeData}".to_string(),
+                "echo Processing: {{PhoneHomeData}}".to_string(),
             ],
             timeout_seconds: 5,
             max_data_length: 4096,
@@ -544,7 +544,7 @@ mod tests {
     async fn test_execute_external_app_with_data_replacement() {
         let config = ExternalAppConfig {
             command: "sh".to_string(),
-            args: vec!["-c".to_string(), "echo Data: ${PhoneHomeData}".to_string()],
+            args: vec!["-c".to_string(), "echo Data: {{PhoneHomeData}}".to_string()],
             timeout_seconds: 5,
             max_data_length: 4096,
             quote_data: false,
@@ -554,7 +554,7 @@ mod tests {
         let result = execute_external_app(&config, "test-phonehome-data", &correlation_id).await;
         assert!(result.is_ok());
         let output = result.unwrap();
-        assert!(output.contains("test-phonehome-data")); // From ${PhoneHomeData}
+        assert!(output.contains("test-phonehome-data")); // From {{PhoneHomeData}}
         assert!(output.contains("Data:")); // From our echo command
     }
 
@@ -623,7 +623,7 @@ mod tests {
         // Test with quote_data = true
         let config_with_quotes = ExternalAppConfig {
             command: "echo".to_string(),
-            args: vec!["${PhoneHomeData}".to_string()],
+            args: vec!["{{PhoneHomeData}}".to_string()],
             timeout_seconds: 5,
             max_data_length: 4096,
             quote_data: true,
@@ -641,7 +641,7 @@ mod tests {
         // Test with quote_data = false
         let config_without_quotes = ExternalAppConfig {
             command: "echo".to_string(),
-            args: vec!["${PhoneHomeData}".to_string()],
+            args: vec!["{{PhoneHomeData}}".to_string()],
             timeout_seconds: 5,
             max_data_length: 4096,
             quote_data: false,
@@ -660,12 +660,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_data_placeholder_replacement() {
-        // Test ${PhoneHomeData} placeholder replacement in arguments
+        // Test {{PhoneHomeData}} placeholder replacement in arguments
         let config = ExternalAppConfig {
             command: "sh".to_string(),
             args: vec![
                 "-c".to_string(),
-                "echo 'Received: ${PhoneHomeData}'".to_string(),
+                "echo 'Received: {{PhoneHomeData}}'".to_string(),
             ],
             timeout_seconds: 5,
             max_data_length: 4096,
@@ -679,17 +679,17 @@ mod tests {
         assert!(result.is_ok());
         let output = result.unwrap();
         assert!(output.contains("Received: instance123|hostname.example.com"));
-        assert!(!output.contains("${PhoneHomeData}")); // Placeholder should be replaced
+        assert!(!output.contains("{{PhoneHomeData}}")); // Placeholder should be replaced
     }
 
     #[tokio::test]
     async fn test_data_placeholder_with_quotes() {
-        // Test ${PhoneHomeData} placeholder replacement with quote_data = true
+        // Test {{PhoneHomeData}} placeholder replacement with quote_data = true
         let config = ExternalAppConfig {
             command: "sh".to_string(),
             args: vec![
                 "-c".to_string(),
-                "echo 'Data: ${PhoneHomeData}'".to_string(),
+                "echo 'Data: {{PhoneHomeData}}'".to_string(),
             ],
             timeout_seconds: 5,
             max_data_length: 4096,
@@ -703,17 +703,17 @@ mod tests {
         assert!(result.is_ok());
         let output = result.unwrap();
         assert!(output.contains("Data: \"test data with spaces\""));
-        assert!(!output.contains("${PhoneHomeData}")); // Placeholder should be replaced
+        assert!(!output.contains("{{PhoneHomeData}}")); // Placeholder should be replaced
     }
 
     #[tokio::test]
     async fn test_multiple_data_placeholders() {
-        // Test multiple ${PhoneHomeData} placeholders in different arguments
+        // Test multiple {{PhoneHomeData}} placeholders in different arguments
         let config = ExternalAppConfig {
             command: "sh".to_string(),
             args: vec![
                 "-c".to_string(),
-                "echo 'First: ${PhoneHomeData}' && echo 'Second: ${PhoneHomeData}'".to_string(),
+                "echo 'First: {{PhoneHomeData}}' && echo 'Second: {{PhoneHomeData}}'".to_string(),
             ],
             timeout_seconds: 5,
             max_data_length: 4096,
@@ -728,12 +728,12 @@ mod tests {
         let output = result.unwrap();
         assert!(output.contains("First: duplicate-test"));
         assert!(output.contains("Second: duplicate-test"));
-        assert!(!output.contains("${PhoneHomeData}")); // All placeholders should be replaced
+        assert!(!output.contains("{{PhoneHomeData}}")); // All placeholders should be replaced
     }
 
     #[tokio::test]
     async fn test_args_without_placeholder() {
-        // Test that arguments without ${PhoneHomeData} placeholder work normally
+        // Test that arguments without {{PhoneHomeData}} placeholder work normally
         let config = ExternalAppConfig {
             command: "sh".to_string(),
             args: vec!["-c".to_string(), "echo 'No placeholder here'".to_string()],

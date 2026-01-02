@@ -51,10 +51,10 @@ key_path = "/var/lib/phonehome/key.pem"
 command = "/usr/bin/process-phone-home"
 
 # Arguments to pass to the command
-# Use ${PhoneHomeData} placeholder in any argument to substitute the sanitized phone home data
-# Example: ["--input", "${PhoneHomeData}"] or ["--data", "${PhoneHomeData}", "--format", "json"]
-# The ${PhoneHomeData} placeholder will be replaced with the actual processed data string
-args = ["--source", "cloud-init", "--format", "pipe-separated", "--data" , "${PhoneHomeData}"]
+# Use {{PhoneHomeData}} placeholder in any argument to substitute the sanitized phone home data
+# Example: ["--input", "{{PhoneHomeData}}"] or ["--data", "{{PhoneHomeData}}", "--format", "json"]
+# The {{PhoneHomeData}} placeholder will be replaced with the actual processed data string
+args = ["--source", "cloud-init", "--format", "pipe-separated", "--data" , "{{PhoneHomeData}}"]
 
 # Timeout in seconds for the external application execution
 timeout_seconds = 30

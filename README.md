@@ -75,7 +75,7 @@ Create a simple processor for the phone home data:
 ```bash
 sudo cat > /usr/local/bin/process-phone-home << 'EOF'
 #!/bin/bash
-# Data is passed as the first argument via ${PhoneHomeData} placeholder
+# Data is passed as the first argument via {{PhoneHomeData}} placeholder
 DATA="$1"
 echo "$(date): Received phone home data: $DATA" >> /var/log/phonehome/phone-home.log
 
@@ -214,22 +214,22 @@ Add `--no-daemon` for console output during development.
 
 ### External Application Configuration
 
-The server can execute external applications when phone home data is received. Data is passed via the `${PhoneHomeData}` placeholder in arguments.
+The server can execute external applications when phone home data is received. Data is passed via the `{{PhoneHomeData}}` placeholder in arguments.
 
 ```toml
 [external_app]
 command = "/usr/local/bin/process-phone-home"  # Command to execute
-args = ["${PhoneHomeData}"]                    # Arguments (${PhoneHomeData} will be replaced)
+args = ["{{PhoneHomeData}}"]                    # Arguments ({{PhoneHomeData}} will be replaced)
 timeout_seconds = 30                           # Execution timeout
 
 # Security settings
 max_data_length = 4096                         # Maximum data length in bytes
-quote_data = false                             # Quote data when using ${PhoneHomeData} (default: false)
+quote_data = false                             # Quote data when using {{PhoneHomeData}} (default: false)
 ```
 
 **Security**: Input data is automatically sanitized and control characters are filtered for security. The external application runs with no special environment variables or working directory.
 
-**Data Passing**: Phone home data is passed to your external application via the `${PhoneHomeData}` placeholder in the arguments configuration. Your application receives this data as command line arguments.
+**Data Passing**: Phone home data is passed to your external application via the `{{PhoneHomeData}}` placeholder in the arguments configuration. Your application receives this data as command line arguments.
 
 ### Phone Home Data Processing
 
@@ -380,7 +380,7 @@ Options:
 
 ```bash
 #!/bin/bash
-# Data is passed as first argument via ${PhoneHomeData} placeholder
+# Data is passed as first argument via {{PhoneHomeData}} placeholder
 DATA="$1"
 LOGFILE="/var/log/phonehome.log"
 echo "$(date -Iseconds): $DATA" >> "$LOGFILE"

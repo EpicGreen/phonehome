@@ -199,7 +199,7 @@ key_path = "/etc/phonehome/key.pem"
 
 [external_app]
 command = "/usr/bin/process-phone-home"
-args = ["--data", "${PhoneHomeData}"]
+args = ["--data", "{{PhoneHomeData}}"]
 timeout_seconds = 60
 
 [phone_home]
