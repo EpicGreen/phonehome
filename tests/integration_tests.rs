@@ -4,9 +4,7 @@ use axum::{
     Router,
 };
 use futures::future::join_all;
-use phonehome::config::{
-    Config, ExternalAppConfig, LoggingConfig, PhoneHomeConfig, ServerConfig, TlsConfig,
-};
+use phonehome::config::{Config, ExternalAppConfig, LoggingConfig, PhoneHomeConfig, ServerConfig};
 use phonehome::models::PhoneHomeData;
 use phonehome::{health_check, AppState};
 use serde_json::{json, Value};
@@ -53,10 +51,6 @@ fn create_test_config() -> Config {
             max_file_size_mb: 10,
             max_files: 3,
         },
-        tls: Some(TlsConfig {
-            cert_path: "/tmp/test-cert.pem".into(),
-            key_path: "/tmp/test-key.pem".into(),
-        }), // TLS is required for HTTPS-only operation
         external_app: ExternalAppConfig {
             command: "echo".to_string(),
             args: vec!["test-processed:".to_string()],
@@ -171,19 +165,7 @@ include_instance_id = false
     fn test_phone_home_url_generation() {
         let config = create_test_config();
         let url = config.get_phone_home_url();
-        // Server operates in HTTPS-only mode
-        assert_eq!(url, "https://127.0.0.1:8444/phone-home/test-token-123");
-
-        let mut config_with_custom_tls = config;
-        config_with_custom_tls.tls = Some(TlsConfig {
-            cert_path: "/custom/cert.pem".into(),
-            key_path: "/custom/key.pem".into(),
-        });
-        let url_custom = config_with_custom_tls.get_phone_home_url();
-        assert_eq!(
-            url_custom,
-            "https://127.0.0.1:8444/phone-home/test-token-123"
-        );
+        assert_eq!(url, "http://127.0.0.1:8444/phone-home/test-token-123");
     }
 }
 
@@ -349,34 +331,6 @@ mod debug_logging_tests {
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["status"], "success");
-    }
-}
-
-#[cfg(test)]
-mod tls_tests {
-    use phonehome::tls::generate_self_signed_cert;
-    use tempfile::TempDir;
-
-    #[tokio::test]
-    async fn test_generate_self_signed_cert() {
-        let temp_dir = TempDir::new().unwrap();
-        let cert_path = temp_dir.path().join("cert.pem");
-        let key_path = temp_dir.path().join("key.pem");
-
-        let result = generate_self_signed_cert("test.example.com", &cert_path, &key_path).await;
-        assert!(result.is_ok());
-
-        assert!(cert_path.exists());
-        assert!(key_path.exists());
-
-        // Verify the certificate files are not empty
-        let cert_content = std::fs::read_to_string(&cert_path).unwrap();
-        let key_content = std::fs::read_to_string(&key_path).unwrap();
-
-        assert!(cert_content.contains("-----BEGIN CERTIFICATE-----"));
-        assert!(cert_content.contains("-----END CERTIFICATE-----"));
-        assert!(key_content.contains("-----BEGIN PRIVATE KEY-----"));
-        assert!(key_content.contains("-----END PRIVATE KEY-----"));
     }
 }
 
@@ -718,78 +672,6 @@ mod load_tests {
     }
 }
 
-mod certificate_tests {
-    use super::*;
-    use phonehome::tls::{generate_self_signed_cert, setup_tls_config};
-    use tempfile::TempDir;
-
-    #[tokio::test]
-    async fn test_self_signed_cert_generation() {
-        let temp_dir = TempDir::new().unwrap();
-        let cert_path = temp_dir.path().join("test_cert.pem");
-        let key_path = temp_dir.path().join("test_key.pem");
-
-        let result = generate_self_signed_cert("localhost", &cert_path, &key_path).await;
-        assert!(result.is_ok());
-
-        assert!(cert_path.exists());
-        assert!(key_path.exists());
-
-        // Verify certificate content
-        let cert_content = tokio::fs::read_to_string(&cert_path).await.unwrap();
-        assert!(cert_content.contains("-----BEGIN CERTIFICATE-----"));
-        assert!(cert_content.contains("-----END CERTIFICATE-----"));
-
-        // Verify key content
-        let key_content = tokio::fs::read_to_string(&key_path).await.unwrap();
-        assert!(key_content.contains("-----BEGIN PRIVATE KEY-----"));
-        assert!(key_content.contains("-----END PRIVATE KEY-----"));
-    }
-
-    #[tokio::test]
-    async fn test_setup_tls_config_with_existing_certs() {
-        let temp_dir = TempDir::new().unwrap();
-        let cert_path = temp_dir.path().join("cert.pem");
-        let key_path = temp_dir.path().join("key.pem");
-
-        // Generate test certificates first
-        generate_self_signed_cert("test.example.com", &cert_path, &key_path)
-            .await
-            .unwrap();
-
-        let config = TlsConfig {
-            cert_path,
-            key_path,
-        };
-
-        let result = setup_tls_config(&config).await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_setup_tls_config_generates_missing_certs() {
-        let temp_dir = TempDir::new().unwrap();
-        let cert_path = temp_dir.path().join("cert.pem");
-        let key_path = temp_dir.path().join("key.pem");
-
-        let config = TlsConfig {
-            cert_path: cert_path.clone(),
-            key_path: key_path.clone(),
-        };
-
-        // Certificates don't exist initially
-        assert!(!cert_path.exists());
-        assert!(!key_path.exists());
-
-        let result = setup_tls_config(&config).await;
-        assert!(result.is_ok());
-
-        // Certificates should now exist
-        assert!(cert_path.exists());
-        assert!(key_path.exists());
-    }
-}
-
 #[cfg(test)]
 mod web_tests {
     use super::*;
@@ -840,7 +722,7 @@ mod web_tests {
 
         assert!(body_str.contains("404"));
         assert!(body_str.contains("Page Not Found"));
-        assert!(body_str.contains("Available endpoints"));
+        assert!(body_str.contains("Return to Home"));
     }
 
     #[tokio::test]
@@ -868,7 +750,7 @@ mod web_tests {
 
         assert!(body_str.contains("401"));
         assert!(body_str.contains("Unauthorized"));
-        assert!(body_str.contains("Security Notice"));
+        assert!(body_str.contains("Authentication is required"));
     }
 
     #[tokio::test]
@@ -928,7 +810,6 @@ mod web_tests {
 mod logging_tests {
     use super::*;
     use phonehome::config::LoggingConfig;
-    use std::path::PathBuf;
     use tempfile::TempDir;
 
     #[tokio::test]
@@ -951,25 +832,6 @@ mod logging_tests {
         assert!(!logging_config.log_to_journald);
         assert_eq!(logging_config.max_file_size_mb, 50);
         assert_eq!(logging_config.max_files, 5);
-    }
-
-    #[tokio::test]
-    async fn test_default_certificate_paths() {
-        let config = Config::default();
-
-        // Test that default certificate paths use /var/lib/phonehome
-        if let Some(tls_config) = &config.tls {
-            assert_eq!(
-                tls_config.cert_path,
-                PathBuf::from("/var/lib/phonehome/cert.pem")
-            );
-            assert_eq!(
-                tls_config.key_path,
-                PathBuf::from("/var/lib/phonehome/key.pem")
-            );
-        } else {
-            panic!("TLS config should be Some in default configuration");
-        }
     }
 
     #[tokio::test]

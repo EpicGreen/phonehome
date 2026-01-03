@@ -1,12 +1,11 @@
 //! PhoneHome Server Library
 //!
-//! A secure HTTPS server for handling Cloud Init phone home requests with configurable
+//! A server for handling Cloud Init phone home requests with configurable
 //! data processing and external application execution.
 
 pub mod config;
 pub mod handlers;
 pub mod models;
-pub mod tls;
 pub mod web;
 
 pub use config::Config;

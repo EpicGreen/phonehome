@@ -8,7 +8,6 @@ use tracing::{debug, error, info, warn};
 pub struct Config {
     pub server: ServerConfig,
     pub logging: LoggingConfig,
-    pub tls: Option<TlsConfig>,
     pub external_app: ExternalAppConfig,
     pub phone_home: PhoneHomeConfig,
 }
@@ -28,12 +27,6 @@ pub struct LoggingConfig {
     pub log_to_journald: bool,
     pub max_file_size_mb: u64,
     pub max_files: u32,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct TlsConfig {
-    pub cert_path: PathBuf,
-    pub key_path: PathBuf,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -83,10 +76,6 @@ impl Default for Config {
                 max_file_size_mb: 100,
                 max_files: 10,
             },
-            tls: Some(TlsConfig {
-                cert_path: PathBuf::from("/var/lib/phonehome/cert.pem"),
-                key_path: PathBuf::from("/var/lib/phonehome/key.pem"),
-            }),
             external_app: ExternalAppConfig {
                 command: "/usr/local/bin/process-phone-home".to_string(),
                 args: vec!["--data".to_string()],
@@ -209,18 +198,7 @@ impl Config {
         }
         debug!("Server port validation passed: {}", self.server.port);
 
-        // TLS configuration validation
-        debug!("Validating TLS configuration");
-        if let Some(ref tls) = self.tls {
-            debug!(
-                "TLS enabled - cert: {:?}, key: {:?}",
-                tls.cert_path, tls.key_path
-            );
-        } else {
-            error!("No TLS configuration found - HTTPS is required for operation");
-            anyhow::bail!("TLS configuration is required - server operates in HTTPS-only mode");
-        }
-
+        debug!("Logging configuration validation");
         // Validate external app configuration
         debug!("Validating external application configuration");
         if self.external_app.command.is_empty() {
@@ -333,14 +311,13 @@ impl Config {
     }
 
     pub fn get_phone_home_url(&self) -> String {
-        // Server operates in HTTPS-only mode
         let url = format!(
-            "https://{}:{}/phone-home/{}",
+            "http://{}:{}/phone-home/{}",
             self.server.host, self.server.port, self.server.token
         );
 
         debug!("Generated phone home URL: {}", url);
-        info!("Phone home URL generated with HTTPS protocol");
+        info!("Phone home URL generated with HTTP protocol");
 
         url
     }
@@ -389,7 +366,7 @@ mod tests {
     fn test_phone_home_url_generation() {
         let config = Config::default();
         let url = config.get_phone_home_url();
-        assert!(url.starts_with("https://"));
+        assert!(url.starts_with("http://"));
         assert!(url.contains(&config.server.token));
     }
 }

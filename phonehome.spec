@@ -1,5 +1,5 @@
 Name:           phonehome
-Version:        0.3.0
+Version:        0.3.1
 Release:        1%{?dist}
 Summary:        Secure HTTPS server for Cloud Init phone home requests
 

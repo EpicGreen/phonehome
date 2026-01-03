@@ -1,10 +1,10 @@
 # PhoneHome Server
 
-A secure, lightweight HTTPS server designed to receive and process phone home data from cloud-init instances. This server provides a simple API endpoint for cloud instances to report their initialization status and system information over TLS-encrypted connections.
+A lightweight server designed to receive and process phone home data from cloud-init instances. This server provides a simple API endpoint for cloud instances to report their initialization status and system information.
 
 ## Features
 
-- **Secure HTTPS-only server** with automatic self-signed certificate generation
+- **Simple HTTP server** for cloud-init phone home requests
 - **Cloud-init integration** via standard phone home module
 - **External application execution** with configurable data processing
 - **Rate limiting** to prevent abuse
@@ -52,23 +52,7 @@ sudo mkdir -p /var/log/phonehome
 sudo chown phonehome:phonehome /var/log/phonehome
 ```
 
-### 5. Set Up TLS Certificates
-
-The server requires TLS certificates and will automatically generate self-signed certificates if none are provided:
-
-```bash
-# Self-signed certificates will be automatically created in:
-# /var/lib/phonehome/cert.pem
-# /var/lib/phonehome/key.pem
-
-# For production, provide your own certificates by updating config.toml:
-# cert_path = "/path/to/your/cert.pem"  
-# key_path = "/path/to/your/key.pem"
-```
-
-**Note**: The server operates in HTTPS-only mode. Self-signed certificates are suitable for internal networks, but production deployments should use certificates from a trusted CA.
-
-### 6. Create an External Application
+### 5. Create an External Application
 
 Create a simple processor for the phone home data:
 
@@ -101,16 +85,16 @@ sudo /usr/local/bin/phonehome --config /etc/phonehome/config.toml
 sudo /usr/local/bin/phonehome --config /etc/phonehome/config.toml --no-daemon
 ```
 
-### 8. Test the Setup
+### 7. Test the Setup
 
 ```bash
 # Check server status
-curl -k https://localhost:443/health
+curl http://localhost:9690/health
 
 # Test phone home endpoint (replace YOUR_TOKEN with actual token)
-curl -k -X POST -H "Content-Type: application/x-www-form-urlencoded" \
+curl -X POST -H "Content-Type: application/x-www-form-urlencoded" \
   -d "instance_id=i-1234567890&hostname=test-host&fqdn=test-host.example.com" \
-  https://localhost:443/phone-home/YOUR_TOKEN
+  http://localhost:9690/phone-home/YOUR_TOKEN
 ```
 
 ## Web Interface
@@ -133,16 +117,6 @@ host = "0.0.0.0"           # Bind address (0.0.0.0 for all interfaces)
 port = 443                 # Port to listen on
 token = "your-secret-token-here"  # Authentication token for phone home requests
 ```
-
-### TLS Configuration
-
-```toml
-[tls]
-cert_path = "/var/lib/phonehome/cert.pem"  # TLS certificate file
-key_path = "/var/lib/phonehome/key.pem"    # TLS private key file
-```
-
-**Note**: The server requires TLS certificates to operate. If the specified certificate files don't exist, the server will automatically generate self-signed certificates for immediate use.
 
 ### Logging Configuration
 
@@ -287,12 +261,10 @@ To integrate with cloud-init, add the phone home configuration to your cloud-ini
 ```yaml
 #cloud-config
 phone_home:
-  url: https://your-server.com:443/phone-home/your-secret-token
+  url: http://your-server.com:9690/phone-home/your-secret-token
   post: all
   tries: 3
 ```
-
-**Important**: The URL must use `https://` as the server only accepts TLS-encrypted connections.
 
 This configuration tells cloud-init to send phone home data to your server after instance initialization.
 
@@ -370,7 +342,6 @@ Options:
 - **Token Authentication**: All phone home requests require a valid token
 - **Rate Limiting**: Built-in rate limiting prevents abuse
 - **Input Sanitization**: All data is sanitized before processing
-- **TLS Encryption**: All communication encrypted via HTTPS
 - **Data Length Limits**: Configurable maximum data size
 - **Correlation IDs**: All requests are tracked with unique correlation IDs
 
@@ -425,16 +396,7 @@ curl -X POST -H 'Content-type: application/json' \
 
 ### Prerequisites
 
-- Rust 1.70+ 
-- OpenSSL development libraries
-
-```bash
-# Fedora/RHEL/CentOS
-sudo dnf install openssl-devel
-
-# Ubuntu/Debian  
-sudo apt install libssl-dev pkg-config
-```
+- Rust 1.70+
 
 ### Building
 
@@ -512,10 +474,6 @@ sudo dnf install target/generate-rpm/phonehome-*.rpm
 
 **Permission Denied Errors**
 ```bash
-# Fix certificate directory permissions
-sudo mkdir -p /var/lib/phonehome
-sudo chown phonehome:phonehome /var/lib/phonehome
-
 # Fix log directory permissions  
 sudo mkdir -p /var/log/phonehome
 sudo chown phonehome:phonehome /var/log/phonehome
@@ -528,16 +486,6 @@ sudo ss -tlnp | grep :443
 
 # Use different port
 phonehome --port 8443
-```
-
-**TLS Certificate Issues**
-```bash
-# Remove invalid certificates to regenerate self-signed ones
-sudo rm /var/lib/phonehome/*.pem
-sudo systemctl restart phonehome
-
-# Note: Server requires TLS certificates to start
-# Self-signed certificates will be automatically generated if missing
 ```
 
 **External Application Not Executing**

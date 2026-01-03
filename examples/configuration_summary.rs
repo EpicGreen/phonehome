@@ -1,6 +1,4 @@
-use phonehome::config::{
-    Config, ExternalAppConfig, LoggingConfig, PhoneHomeConfig, ServerConfig, TlsConfig,
-};
+use phonehome::config::{Config, ExternalAppConfig, LoggingConfig, PhoneHomeConfig, ServerConfig};
 use std::path::PathBuf;
 
 fn main() {
@@ -28,10 +26,6 @@ fn main() {
             max_file_size_mb: 100,
             max_files: 10,
         },
-        tls: Some(TlsConfig {
-            cert_path: PathBuf::from("/var/lib/phonehome/cert.pem"),
-            key_path: PathBuf::from("/var/lib/phonehome/key.pem"),
-        }),
         external_app: ExternalAppConfig {
             command: "/usr/bin/process-phone-home".to_string(),
             args: vec![

@@ -1,7 +1,4 @@
-use phonehome::config::{
-    Config, ExternalAppConfig, LoggingConfig, PhoneHomeConfig, ServerConfig, TlsConfig,
-};
-use std::path::PathBuf;
+use phonehome::config::{Config, ExternalAppConfig, LoggingConfig, PhoneHomeConfig, ServerConfig};
 use tempfile::TempDir;
 
 #[cfg(test)]
@@ -26,10 +23,6 @@ mod journald_logging_tests {
                 max_file_size_mb: 50,
                 max_files: 5,
             },
-            tls: Some(TlsConfig {
-                cert_path: PathBuf::from("/tmp/test-cert.pem"),
-                key_path: PathBuf::from("/tmp/test-key.pem"),
-            }),
             external_app: ExternalAppConfig {
                 command: "/bin/echo".to_string(),
                 args: vec!["test".to_string()],

@@ -1,6 +1,4 @@
-use phonehome::config::{
-    Config, ExternalAppConfig, LoggingConfig, PhoneHomeConfig, ServerConfig, TlsConfig,
-};
+use phonehome::config::{Config, ExternalAppConfig, LoggingConfig, PhoneHomeConfig, ServerConfig};
 use std::path::PathBuf;
 use tracing::{debug, error, info, trace, warn};
 
@@ -24,10 +22,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             max_file_size_mb: 50,
             max_files: 5,
         },
-        tls: Some(TlsConfig {
-            cert_path: PathBuf::from("/tmp/test-cert.pem"),
-            key_path: PathBuf::from("/tmp/test-key.pem"),
-        }),
         external_app: ExternalAppConfig {
             command: "/bin/echo".to_string(),
             args: vec!["journald-test".to_string()],
@@ -111,10 +105,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     error!(
-        event = "tls_cert_error",
-        cert_path = "/var/lib/phonehome/cert.pem",
-        error = "Certificate expired",
-        "TLS certificate validation failed"
+        event = "config_error",
+        config_path = "/etc/phonehome/config.toml",
+        error = "Invalid configuration",
+        "Configuration validation failed"
     );
 
     println!("Log messages sent to journald and console.");
@@ -208,10 +202,6 @@ mod tests {
                 max_file_size_mb: 100,
                 max_files: 10,
             },
-            tls: Some(TlsConfig {
-                cert_path: PathBuf::from("/tmp/cert.pem"),
-                key_path: PathBuf::from("/tmp/key.pem"),
-            }),
             external_app: ExternalAppConfig {
                 command: "/bin/true".to_string(),
                 args: vec![],

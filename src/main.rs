@@ -1,4 +1,4 @@
-use std::{path::PathBuf, process::exit};
+use std::path::PathBuf;
 
 use axum::response::Response;
 use axum::{
@@ -7,18 +7,18 @@ use axum::{
 };
 use clap::Parser;
 use std::net::SocketAddr;
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 use phonehome::{
     config::Config,
     handlers::{phone_home_handler, RateLimiter},
-    health_check, tls, web, AppState,
+    health_check, web, AppState,
 };
 
 #[derive(Debug, Parser)]
 #[command(name = "phonehome")]
-#[command(about = "A secure HTTPS server for Cloud Init phone home requests")]
+#[command(about = "A server for Cloud Init phone home requests")]
 struct Cli {
     /// Path to configuration file
     #[arg(short, long, default_value = "/etc/phonehome/config.toml")]
@@ -65,29 +65,6 @@ async fn main() -> anyhow::Result<()> {
     info!("Server will bind to: {}", bind_addr);
     debug!("Host: {}, Port: {}", config.server.host, port);
 
-    // Require TLS configuration
-    let tls_config = match &config.tls {
-        Some(tls_config) => {
-            info!("TLS configuration found - setting up certificates");
-            debug!(
-                "TLS config: cert={:?}, key={:?}",
-                tls_config.cert_path, tls_config.key_path
-            );
-            if let Err(err) = tls::setup_tls_config(tls_config).await {
-                error!("TLS setup failed: {}", err);
-                error!("Server cannot start without valid TLS configuration");
-                exit(1);
-            }
-            info!("TLS setup completed successfully");
-            tls_config.clone()
-        }
-        None => {
-            error!("No TLS configuration found - HTTPS is required");
-            error!("Please provide TLS configuration in config file");
-            exit(1);
-        }
-    };
-
     // Create application state with rate limiter
     debug!("Creating application state");
     let rate_limiter = RateLimiter::new(100, 300); // 100 requests per 5 minutes
@@ -120,14 +97,10 @@ async fn main() -> anyhow::Result<()> {
     info!("  Fallback: Custom 404 error page");
     debug!("Router built successfully with shared state");
 
-    // Start HTTPS server
-    info!("Starting HTTPS server on {}", bind_addr);
+    // Start HTTP server
+    info!("Starting HTTP server on {}", bind_addr);
     info!("Phone home URL: {}", state.config.get_phone_home_url());
-    debug!(
-        "Using TLS certificates: cert={:?}, key={:?}",
-        tls_config.cert_path, tls_config.key_path
-    );
-    start_https_server(app, &bind_addr, &tls_config).await?;
+    start_http_server(app, &bind_addr).await?;
 
     info!("Server shutdown completed");
     Ok(())
@@ -137,31 +110,20 @@ async fn phone_home_get_handler() -> Response {
     web::forbidden().await
 }
 
-async fn start_https_server(
-    app: Router,
-    bind_addr: &str,
-    tls_config: &phonehome::config::TlsConfig,
-) -> anyhow::Result<()> {
-    use axum_server::tls_rustls::RustlsConfig;
-
-    debug!("Loading TLS configuration for HTTPS server");
-    debug!("Certificate file: {:?}", tls_config.cert_path);
-    debug!("Private key file: {:?}", tls_config.key_path);
-
-    let rustls_config =
-        RustlsConfig::from_pem_file(&tls_config.cert_path, &tls_config.key_path).await?;
-    info!("TLS configuration loaded successfully for HTTPS server");
-
+async fn start_http_server(app: Router, bind_addr: &str) -> anyhow::Result<()> {
     debug!("Parsing bind address: {}", bind_addr);
-    let socket_addr = bind_addr.parse()?;
+    let socket_addr: SocketAddr = bind_addr.parse()?;
     debug!("Bind address parsed successfully: {:?}", socket_addr);
 
-    info!("HTTPS server listening successfully, ready to accept connections");
-    axum_server::bind_rustls(socket_addr, rustls_config)
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
-        .await?;
+    info!("HTTP server listening successfully, ready to accept connections");
+    let listener = tokio::net::TcpListener::bind(socket_addr).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
-    debug!("HTTPS server shutdown completed");
+    debug!("HTTP server shutdown completed");
     Ok(())
 }
 

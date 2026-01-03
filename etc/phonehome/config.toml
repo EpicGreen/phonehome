@@ -6,8 +6,8 @@
 # Host to bind the server to (0.0.0.0 for all interfaces, 127.0.0.1 for localhost only)
 host = "127.0.0.1"
 
-# Port to listen on for HTTPS connections
-port = 443
+# Port to listen on for HTTP connections
+port = 9690
 
 # Secret token that must be included in the phone home URL
 # IMPORTANT: Change this to a secure, random value for production use!
@@ -21,10 +21,10 @@ log_file = "/var/log/phonehome/phonehome.log"
 log_level = "info"
 
 # Enable file logging with daily rotation
-log_to_file = true
+log_to_file = false
 
 # Enable systemd journald logging
-log_to_journald = false
+log_to_journald = true
 
 # Maximum log file size in MB before rotation (used by tracing-appender)
 max_file_size_mb = 100
@@ -32,18 +32,7 @@ max_file_size_mb = 100
 # Maximum number of rotated log files to keep
 max_files = 10
 
-[tls]
-# Path to the TLS certificate file
-# If the file doesn't exist, a self-signed certificate will be generated automatically
-# Note: Self-signed certificates are stored in /var/lib/phonehome for better security
-cert_path = "/var/lib/phonehome/cert.pem"
 
-# Path to the TLS private key file
-# If the file doesn't exist, a private key will be generated automatically
-key_path = "/var/lib/phonehome/key.pem"
-
-# Note: TLS is required for operation. The server will not start without TLS certificates.
-# If the certificate files don't exist, self-signed certificates will be generated automatically.
 
 [external_app]
 # Command to execute when phone home data is received
