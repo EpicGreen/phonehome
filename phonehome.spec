@@ -1,5 +1,5 @@
 Name:           phonehome
-Version:        0.3.1
+Version:        0.3.2
 Release:        1%{?dist}
 Summary:        Secure HTTPS server for Cloud Init phone home requests
 
@@ -91,6 +91,7 @@ getent passwd phonehome >/dev/null || \
 %post
 chown phonehome:phonehome %{_localstatedir}/lib/phonehome
 chown phonehome:phonehome %{_localstatedir}/log/phonehome
+chown phonehome:phonehome %{_sysconfdir}/phonehome
 chown root:phonehome %{_sysconfdir}/phonehome
 chmod 750 %{_localstatedir}/lib/phonehome
 chmod 750 %{_localstatedir}/log/phonehome

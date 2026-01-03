@@ -1,6 +1,5 @@
 [Unit]
-Description=PhoneHome Server - Cloud Init Phone Home Handler
-Documentation=https://github.com/your-org/phonehome
+Description=PhoneHome Server - CloudInit Phonehome Handler
 After=network.target network-online.target
 Wants=network-online.target
 AssertFileIsExecutable=/usr/bin/phonehome
@@ -17,9 +16,9 @@ StartLimitInterval=60s
 StartLimitBurst=3
 
 # Pre-start script to ensure directories exist
-ExecStartPre=/bin/mkdir -p /var/log/phonehome /var/lib/phonehome
-ExecStartPre=/bin/chown phonehome:phonehome /var/log/phonehome /var/lib/phonehome
-ExecStartPre=/bin/chmod 755 /var/log/phonehome /var/lib/phonehome
+ExecStartPre=/bin/mkdir -p /var/log/phonehome /var/lib/phonehome /etc/phonehome
+ExecStartPre=/bin/chown phonehome:phonehome /var/log/phonehome /var/lib/phonehome /etc/phonehome
+ExecStartPre=/bin/chmod 755 /var/log/phonehome /var/lib/phonehome /etc/phonehome
 
 # Security settings
 NoNewPrivileges=true
