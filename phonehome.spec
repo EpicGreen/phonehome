@@ -1,5 +1,5 @@
 Name:           phonehome
-Version:        0.3.2
+Version:        0.3.3
 Release:        1%{?dist}
 Summary:        Secure HTTPS server for Cloud Init phone home requests
 
@@ -89,6 +89,10 @@ getent passwd phonehome >/dev/null || \
     -s /sbin/nologin -c "PhoneHome Server" phonehome
 
 %post
+if grep -q "your-secret-token-here-change-me-123456" %{_sysconfdir}/phonehome/config.toml; then
+    RANDOM_TOKEN=$(openssl rand -hex 32)
+    sed -i "s/your-secret-token-here-change-me-123456/$RANDOM_TOKEN/" %{_sysconfdir}/phonehome/config.toml
+fi
 chown phonehome:phonehome %{_localstatedir}/lib/phonehome
 chown phonehome:phonehome %{_localstatedir}/log/phonehome
 chown phonehome:phonehome %{_sysconfdir}/phonehome
@@ -96,11 +100,6 @@ chown root:phonehome %{_sysconfdir}/phonehome
 chmod 750 %{_localstatedir}/lib/phonehome
 chmod 750 %{_localstatedir}/log/phonehome
 chmod 750 %{_sysconfdir}/phonehome
-
-if grep -q "your-secret-token-here-change-me-123456" %{_sysconfdir}/phonehome/config.toml; then
-    RANDOM_TOKEN=$(openssl rand -hex 32)
-    sed -i "s/your-secret-token-here-change-me-123456/$RANDOM_TOKEN/" %{_sysconfdir}/phonehome/config.toml
-fi
 %systemd_post %{name}.service
 
 %preun

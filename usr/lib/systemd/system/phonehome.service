@@ -16,9 +16,9 @@ StartLimitInterval=60s
 StartLimitBurst=3
 
 # Pre-start script to ensure directories exist
-ExecStartPre=/bin/mkdir -p /var/log/phonehome /var/lib/phonehome /etc/phonehome
-ExecStartPre=/bin/chown phonehome:phonehome /var/log/phonehome /var/lib/phonehome /etc/phonehome
-ExecStartPre=/bin/chmod 755 /var/log/phonehome /var/lib/phonehome /etc/phonehome
+ExecStartPre=/bin/mkdir -p /var/log/phonehome /var/lib/phonehome
+ExecStartPre=/bin/chown phonehome:phonehome /var/log/phonehome /var/lib/phonehome
+ExecStartPre=/bin/chmod 755 /var/log/phonehome /var/lib/phonehome
 
 # Security settings
 NoNewPrivileges=true
