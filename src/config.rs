@@ -312,7 +312,7 @@ impl Config {
 
     pub fn get_phone_home_url(&self) -> String {
         let url = format!(
-            "http://{}:{}/phone-home/{}",
+            "http://{}:{}/{}",
             self.server.host, self.server.port, self.server.token
         );
 

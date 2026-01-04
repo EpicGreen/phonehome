@@ -94,7 +94,7 @@ curl http://localhost:9690/health
 # Test phone home endpoint (replace YOUR_TOKEN with actual token)
 curl -X POST -H "Content-Type: application/x-www-form-urlencoded" \
   -d "instance_id=i-1234567890&hostname=test-host&fqdn=test-host.example.com" \
-  http://localhost:9690/phone-home/YOUR_TOKEN
+  http://your-server.com:your-port/YOUR_TOKEN
 ```
 
 ## Web Interface
@@ -103,7 +103,7 @@ The server provides a simple web interface accessible at the root URL:
 
 - **Status page**: Shows server information and configuration
 - **Health endpoint**: `/health` - Returns server status
-- **Phone home endpoint**: `/phone-home/{token}` - Receives cloud-init data
+- **Phone home endpoint**: `/{token}` - Receives cloud-init data
 
 ## Configuration
 
@@ -261,7 +261,7 @@ To integrate with cloud-init, add the phone home configuration to your cloud-ini
 ```yaml
 #cloud-config
 phone_home:
-  url: http://your-server.com:9690/phone-home/your-secret-token
+  url: http://your-server.com:port/your-secret-token
   post: all
   tries: 3
 ```
@@ -285,7 +285,7 @@ The following fields can be extracted from cloud-init phone home requests:
 
 ### Phone Home Endpoint
 
-**POST** `/phone-home/{token}`
+**POST** `/{token}`
 
 Receives phone home data from cloud-init instances.
 

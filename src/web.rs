@@ -101,7 +101,7 @@ pub async fn landing_page() -> Html<&'static str> {
 
         <pre><code>#cloud-config
 phone_home:
-  url: "http://your-server.com:8080/phone-home/your-token"
+  url: "http://your-server.com:your-port/your-token"
   post: all
   tries: 10
         </code></pre>
